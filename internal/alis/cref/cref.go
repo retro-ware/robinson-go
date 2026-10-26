@@ -34,6 +34,8 @@ static int cref_unpack_script(const char *path, u8 *out, u32 magic)
     alis.typepack &= 0xfe;
     return unpack_script(path, out);
 }
+void unpack_old(u8* ptr_packed, const u32 packed_sz, u8* ptr_unpacked, const u32 unpacked_sz, s8 modpack);
+u32 unpack_new(u8* ptr_packed, const u32 packed_sz, u8* ptr_unpacked, const u32 unpacked_sz, u8* dictionary);
 static u8 *cref_mem(void) { return alis.mem; }
 static u32 cref_memsize(void) { return alis.platform.ram_sz; }
 
@@ -218,4 +220,14 @@ func UnpackScript(path string, magic uint32, out []byte) int {
 	p := C.CString(path)
 	defer C.free(unsafe.Pointer(p))
 	return int(C.cref_unpack_script(p, (*C.u8)(unsafe.Pointer(&out[0])), C.u32(magic)))
+}
+
+// UnpackOld runs alis unpack_old.
+func UnpackOld(packed, out []byte, modpack int) {
+	C.unpack_old((*C.u8)(unsafe.Pointer(&packed[0])), C.u32(len(packed)), (*C.u8)(unsafe.Pointer(&out[0])), C.u32(len(out)), C.s8(modpack))
+}
+
+// UnpackNew runs alis unpack_new into out[:size].
+func UnpackNew(packed, out []byte, size int, dict []byte) {
+	C.unpack_new((*C.u8)(unsafe.Pointer(&packed[0])), C.u32(len(packed)), (*C.u8)(unsafe.Pointer(&out[0])), C.u32(size), (*C.u8)(unsafe.Pointer(&dict[0])))
 }

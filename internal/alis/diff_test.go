@@ -282,3 +282,51 @@ func TestUnpackScripts(t *testing.T) {
 	}
 	t.Logf("%d scripts", n)
 }
+
+// TestUnpackRandom feeds random packed streams to both packers (the data
+// files unpack_script_fp reads); the streams are padded with zeros because
+// the packers may read past the packed size.
+func TestUnpackRandom(t *testing.T) {
+	r := rand.New(rand.NewPCG(7, 7))
+	skipped := 0
+	defer func() { t.Logf("%d of 1500 new-packer cases undefined", skipped) }()
+	for c := range 3000 {
+		n := 1 + r.IntN(600)
+		size := 1 + r.IntN(2000)
+		packed := make([]byte, n+0x10000)
+		for i := range n {
+			packed[i] = byte(r.IntN(256))
+		}
+		got := make([]byte, size+0x10000)
+		want := make([]byte, size+0x10000)
+		if c%2 == 0 {
+			mp := []int{1, 2, 8}[r.IntN(3)]
+			size = max(size, mp) // interleaved output needs one byte per plane
+			unpackOld(packed[:n], got[:size], mp)
+			cref.UnpackOld(packed[:n], want[:size], mp)
+		} else {
+			dict := make([]byte, packedDictionarySize)
+			for i := range dict {
+				dict[i] = byte(r.IntN(256))
+			}
+			// Random streams can run the new packer far past its output;
+			// those are undefined in C, so only defined runs are compared.
+			if !func() (ok bool) {
+				defer func() { recover() }()
+				unpackNew(packed[:n], got, size, dict)
+				return true
+			}() {
+				skipped++
+				continue
+			}
+			cref.UnpackNew(packed[:n], want, size, dict)
+		}
+		if !bytes.Equal(got, want) {
+			i := 0
+			for got[i] == want[i] {
+				i++
+			}
+			t.Fatalf("case %d (size %d): first diff at %d", c, size, i)
+		}
+	}
+}
