@@ -252,3 +252,33 @@ func TestMV2Player(t *testing.T) {
 		}
 	}
 }
+
+// TestUnpackScripts unpacks every packed .IO script with both packers.
+func TestUnpackScripts(t *testing.T) {
+	v := pair(t)
+	data, _ := filepath.Abs(filepath.Join("..", "..", "orig", "cd"))
+	names, _ := filepath.Glob(filepath.Join(data, "*.IO"))
+	n := 0
+	for _, path := range names {
+		raw, _ := os.ReadFile(path)
+		magic := le32(raw)
+		if int8(magic>>24) >= 0 {
+			continue
+		}
+		got, err := v.readScriptFile(filepath.Base(path))
+		if err != nil {
+			t.Fatalf("%s: %v", path, err)
+		}
+		want := make([]byte, int(magic&0xffffff)+0x10000)
+		sz := cref.UnpackScript(path, magic, want)
+		if sz != len(got) || !bytes.Equal(got, want[:sz]) {
+			i := 0
+			for i < min(len(got), sz) && got[i] == want[i] {
+				i++
+			}
+			t.Errorf("%s: go %d bytes, C %d, first diff at %#x", filepath.Base(path), len(got), sz, i)
+		}
+		n++
+	}
+	t.Logf("%d scripts", n)
+}

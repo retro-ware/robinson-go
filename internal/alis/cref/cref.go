@@ -27,6 +27,13 @@ static int cref_init(const char *path)
     sys_init(pl, 0, 1);
     return alis_init(*pl);
 }
+int unpack_script(const char *packed_file_path, u8 *unpacked_buffer);
+static int cref_unpack_script(const char *path, u8 *out, u32 magic)
+{
+    alis.typepack = magic >> 24;
+    alis.typepack &= 0xfe;
+    return unpack_script(path, out);
+}
 static u8 *cref_mem(void) { return alis.mem; }
 static u32 cref_memsize(void) { return alis.platform.ram_sz; }
 
@@ -203,4 +210,12 @@ func MV2Soundrout() { C.mv2_soundrout() }
 func SetInst(i int, addr, unknown uint32) {
 	C.audio.tabinst[i].address = C.u32(addr)
 	C.audio.tabinst[i].unknown = C.u32(unknown)
+}
+
+// UnpackScript runs alis unpack_script on a packed script file; magic is its
+// first header word, which selects the packer as in script_load.
+func UnpackScript(path string, magic uint32, out []byte) int {
+	p := C.CString(path)
+	defer C.free(unsafe.Pointer(p))
+	return int(C.cref_unpack_script(p, (*C.u8)(unsafe.Pointer(&out[0])), C.u32(magic)))
 }
