@@ -1,5 +1,7 @@
 package alis
 
+import "math"
+
 // Audio (alis audio.c, sys.c sys_audio_callback_S16MSB with
 // ALIS_SND_INTERPOLATE_TYPE 1). Four channels: 0-2 PSG effects or samples,
 // 3 samples and the film speech queue. Music players are not ported yet.
@@ -236,6 +238,16 @@ func (v *VM) audioRelocate(lo, hi uint32, delta int32) {
 	}
 }
 
+// cubicAt evaluates the cubic as clang -O2 compiles alis' expression on
+// arm64: fma(a0, t³, a1·t²), then fma(a2, t, ·), + x1, × 1/256 in float.
+func cubicAt(a0, a1, a2, x1 int32, t float32) float32 {
+	t2 := t * t
+	t3 := float32(t2 * t)
+	acc := float32(math.FMA(float64(a0), float64(t3), float64(float32(t2*float32(a1)))))
+	acc = float32(math.FMA(float64(a2), float64(t), float64(acc)))
+	return float32(acc+float32(x1)) * (1.0 / 256)
+}
+
 func hermite4(x0, x1, x2, x3, t float32) float32 {
 	c0 := x1
 	c1 := .5 * (x2 - x0)
@@ -389,8 +401,8 @@ func (v *VM) mixSample(i int, c *channel, buf []int16) {
 		a0 := x3 - x2 - x0 + x1
 		a1 := x0 - x1 - a0
 		a2 := x2 - x0
-		t := float32(float64(acc)/65536.0) - float32(add)
-		r := (float32(a0)*(t*t*t) + float32(a1)*(t*t) + float32(a2)*t + float32(x1)) / 256
+		t := float32(float64(acc)/65536.0 - float64(add))
+		r := cubicAt(a0, a1, a2, x1, t)
 		s0 := int16(int32(r * float32(volratio)))
 		buf[bi] += s0
 		buf[bi+1] += s0

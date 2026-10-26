@@ -39,6 +39,8 @@ type host struct {
 	lastCRC uint32
 	rnd     uint32
 	buf     []byte
+	wav     *os.File
+	wavN    uint32
 }
 
 func (h *host) WallUs() uint64      { return 0 }
@@ -122,7 +124,36 @@ func readEvents(path string) ([]event, error) {
 	}
 	return evs, sc.Err()
 }
-func (h *host) Audio(s []int16) {}
+func (h *host) Audio(s []int16) {
+	if h.wav == nil {
+		return
+	}
+	b := make([]byte, len(s)*2)
+	for i, x := range s {
+		binary.LittleEndian.PutUint16(b[i*2:], uint16(x))
+	}
+	h.wav.Write(b)
+	h.wavN += uint32(len(b))
+}
+
+// wavHeader writes the 44-byte header of a 44100 Hz s16 stereo WAV, as
+// the C harness's ALIS_WAV.
+func wavHeader(f *os.File, n uint32) {
+	h := make([]byte, 44)
+	copy(h, "RIFF")
+	binary.LittleEndian.PutUint32(h[4:], 36+n)
+	copy(h[8:], "WAVEfmt ")
+	binary.LittleEndian.PutUint32(h[16:], 16)
+	binary.LittleEndian.PutUint16(h[20:], 1)
+	binary.LittleEndian.PutUint16(h[22:], 2)
+	binary.LittleEndian.PutUint32(h[24:], 44100)
+	binary.LittleEndian.PutUint32(h[28:], 44100*4)
+	binary.LittleEndian.PutUint16(h[32:], 4)
+	binary.LittleEndian.PutUint16(h[34:], 16)
+	copy(h[36:], "data")
+	binary.LittleEndian.PutUint32(h[40:], n)
+	f.WriteAt(h, 0)
+}
 func (h *host) Random() uint16 {
 	h.rnd = h.rnd*1103515245 + 12345
 	return uint16(h.rnd >> 16 & 0x7fff)
@@ -167,6 +198,7 @@ func main() {
 	dump := flag.String("dump", "", "PNG dump directory")
 	dumpAt := flag.String("dumpat", "", "comma separated ms to dump")
 	input := flag.String("input", "", "input script (C harness ALIS_INPUT format)")
+	wav := flag.String("wav", "", "write the mixed audio as WAV (C harness ALIS_WAV)")
 	flag.Parse()
 
 	h := &host{maxUs: *maxMs * 1000, lastCRC: 0xffffffff, rnd: 1, dumpDir: *dump}
@@ -178,6 +210,19 @@ func main() {
 		defer f.Close()
 		h.logf = bufio.NewWriter(f)
 		defer h.logf.Flush()
+	}
+	if *wav != "" {
+		f, err := os.Create(*wav)
+		if err != nil {
+			log.Fatal(err)
+		}
+		wavHeader(f, 0)
+		f.Seek(44, 0)
+		h.wav = f
+		defer func() {
+			wavHeader(f, h.wavN)
+			f.Close()
+		}()
 	}
 	for _, s := range strings.Split(*dumpAt, ",") {
 		if n, err := strconv.ParseUint(s, 10, 64); err == nil {
