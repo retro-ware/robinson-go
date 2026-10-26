@@ -37,7 +37,7 @@ func TestScriptsMatchReference(t *testing.T) {
 			tmp := t.TempDir()
 			log, wav := filepath.Join(tmp, "crc.log"), filepath.Join(tmp, "out.wav")
 			cmd := exec.Command(os.Args[0], "-data", ".", "-maxms", strconv.Itoa(tc.maxMs),
-				"-input", filepath.Join(td, tc.name+".txt"), "-log", log, "-wav", wav)
+				"-input", filepath.Join(td, tc.name+".txt"), "-log", log, "-wav", wav, "-save", tmp)
 			cmd.Dir = data
 			cmd.Env = append(os.Environ(), "RRQH_RUN_MAIN=1")
 			if out, err := cmd.CombinedOutput(); err != nil {

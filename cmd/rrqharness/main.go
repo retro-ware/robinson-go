@@ -5,6 +5,7 @@ package main
 
 import (
 	"bufio"
+	"cmp"
 	"encoding/binary"
 	"flag"
 	"fmt"
@@ -199,6 +200,7 @@ func main() {
 	dumpAt := flag.String("dumpat", "", "comma separated ms to dump")
 	input := flag.String("input", "", "input script (C harness ALIS_INPUT format)")
 	wav := flag.String("wav", "", "write the mixed audio as WAV (C harness ALIS_WAV)")
+	save := flag.String("save", "", "directory for files the game writes (C harness ALIS_SAVEDIR; default: the data directory)")
 	flag.Parse()
 
 	h := &host{maxUs: *maxMs * 1000, lastCRC: 0xffffffff, rnd: 1, dumpDir: *dump}
@@ -236,7 +238,7 @@ func main() {
 		}
 		h.events = evs
 	}
-	vm, err := alis.New(h, alis.NewFileSys(*data, *data))
+	vm, err := alis.New(h, alis.NewFileSys(*data, cmp.Or(*save, *data)))
 	if err != nil {
 		log.Fatal(err)
 	}
