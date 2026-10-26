@@ -117,5 +117,5 @@ func csavepal(v *VM) {
 	v.dosCsavepal(int16(v.varD7))
 }
 
-// csczoom takes no operands on the PC.
-func csczoom(v *VM) {}
+// csczoom sets the three words at 0x3a (START.EXE 0x433b).
+func csczoom(v *VM) { v.scrWords(0x3a, 3, false) }

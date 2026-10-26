@@ -23,7 +23,6 @@ every 20 ms.
 - `csetmouse`: y comes from a stale D6.
 - `cworld`: alis writes vram+0xffde/0xffdf; the port writes ctx -0x22/-0x21.
 - `cdefworld`: alis writes all 6 bytes to the same address.
-- Handlers missing in alis for v3.1 (consume no operands): csczoom, cscaset, cscamov, cscsun.
 - `cfreadb`: returns before reading the length operand when the handle is empty.
 - `walkland` head bob sampling; `landalti` flag==1 pointer add is a no-op.
 - `cgettime`: alis returns 0,0,0; original returns the DOS time.
@@ -88,6 +87,8 @@ Reference bugs found this way (fixed in the reference, the port follows START.EX
   cfindmat loads goodmat from matent (original bug, kept). cnearcla/cviewcla take a word
   operand; START.EXE's nearest-only path there swaps bx/dx as 16-bit registers and corrupts
   its pointers, so the port follows the other searches.
+- Camera words of the current screen (missing in alis): cscamov/cscaset 0x34 (add/set),
+  csczoom 0x3a, cscsun 0x7c (four words); the screen is looked up after the operands.
 - The test opcodes latch the own mirror flag (0x1602e) for monoform; cavtstmov doesn't set it.
 
 Differential tests (`go test -tags difftest ./internal/alis`, internal/alis/cref links

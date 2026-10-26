@@ -3,9 +3,34 @@ package alis
 // Darkness, angles, follow/view, films and terrain walking (alis opcodes.c,
 // Robinson's Requiem DOS paths).
 
-func cscsun(v *VM)  {}
-func cscaset(v *VM) {} // TODO(START.EXE): alis has no v3 cscaset (no operands)
-func cscamov(v *VM) {} // TODO(START.EXE): alis has no v3 cscamov (no operands)
+// scrWords evaluates n operands into the words at off.. of the current
+// screen, adding when add is set, and marks the screen changed.
+// The screen is looked up after the operands.
+func (v *VM) scrWords(off uint32, n int, add bool) {
+	var w [4]int16
+	for i := range n {
+		v.readexecOpername()
+		w[i] = int16(v.varD7)
+	}
+	scr := v.basemain + uint32(v.curScreenID())
+	for i := range uint32(n) {
+		if add {
+			v.add16(scr+off+i*2, w[i])
+		} else {
+			v.w16(scr+off+i*2, w[i])
+		}
+	}
+	v.mem[scr] |= 0x80
+}
+
+// cscsun sets the four sun words at 0x7c (START.EXE 0x450b).
+func cscsun(v *VM) { v.scrWords(0x7c, 4, false) }
+
+// cscaset sets the camera position at 0x34 (START.EXE 0x430e).
+func cscaset(v *VM) { v.scrWords(0x34, 3, false) }
+
+// cscamov moves the camera position at 0x34 (START.EXE 0x42db).
+func cscamov(v *VM) { v.scrWords(0x34, 3, true) }
 
 func cdarkpal(v *VM) {
 	var p [5]int16
