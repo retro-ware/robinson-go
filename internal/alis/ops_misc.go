@@ -156,7 +156,8 @@ func clinepalet(v *VM) {
 }
 
 // TODO(START.EXE): alis has no v3 cautomode (no operands).
-func cautomode(v *VM) {}
+// cautomode evaluates its operand and does nothing else (START.EXE 0xa393).
+func cautomode(v *VM) { v.readexecOpernameSaveD7() }
 
 func cautofile(v *VM) {
 	v.readexecOpernameSwap()
@@ -164,8 +165,11 @@ func cautofile(v *VM) {
 	v.autoname[12] = 0
 }
 
-// TODO(START.EXE): alis has no v3 ccancel (no operands).
-func ccancel(v *VM) {}
+// ccancel is cerase with the cancel flag (START.EXE 0x5cb7).
+func ccancel(v *VM) {
+	v.ferase = 1
+	cerase(v)
+}
 
 func ccancall(v *VM) {
 	v.ferase = 1

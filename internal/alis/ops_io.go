@@ -95,11 +95,50 @@ func cnoise(v *VM) {
 
 // TODO(START.EXE): alis has no v3 cinitab/cfcreat/cfdel/cfwritei/cpicture;
 // they consume no operands.
-func cinitab(v *VM)  {}
-func cfcreat(v *VM)  {}
-func cfdel(v *VM)    {}
-func cfwritei(v *VM) {}
-func cpicture(v *VM) {}
+// cinitab copies its inline bytes (count-1 of them) to a variable of the
+// running script (START.EXE 0x87b3).
+func cinitab(v *VM) {
+	dst := v.vramAt(int32(v.read16()))
+	n := uint32(int32(v.read16()) - 1)
+	for i := uint32(0); i < n; i++ {
+		v.mem[dst+i] = v.mem[v.script.pc+i]
+	}
+	v.script.pc += n
+}
+
+// cfcreat creates (truncates) a file; the new handle replaces the current
+// file's and is closed at once (START.EXE 0x96ad). The word operand is unused.
+func cfcreat(v *VM) {
+	name := v.readZeroString()
+	v.read16()
+	if v.fp != nil {
+		v.fp.Close()
+		v.fp = nil
+	}
+	f, err := v.fs.Open(name, 0x200)
+	if err != nil {
+		v.alisError(8)
+		return
+	}
+	f.Close()
+}
+
+// cfdel deletes a file (START.EXE 0x96c1).
+func cfdel(v *VM) {
+	if v.fs.Remove(v.readZeroString()) != nil {
+		v.alisError(9)
+	}
+}
+
+// cfwritei writes its inline string, terminator included (START.EXE 0x970b).
+func cfwritei(v *VM) {
+	start := v.script.pc
+	v.readZeroString()
+	v.fwrite(v.mem[start:v.script.pc])
+}
+
+// cpicture evaluates its operand and does nothing else (START.EXE 0x9884).
+func cpicture(v *VM) { v.readexecOpernameSaveD7() }
 
 func cfopen(v *VM) {
 	var name string

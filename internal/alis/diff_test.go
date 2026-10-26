@@ -436,6 +436,8 @@ var fuzzOps = []byte{
 	// entity tests: ctstmov, ctstset, cftstmov, cftstset, csuccent, cpredent,
 	// crstent, cvtstmov, cvftstmov, cwmov, cwtstmov, cwftstmov, ctstform, cavtstmov
 	0x53, 0x54, 0x55, 0x56, 0x57, 0x58, 0x60, 0x8e, 0x8f, 0xa2, 0xa3, 0xa4, 0xa5, 0xf9,
+	// cinitab, cpicture, cautomode, ccancel (file ops stay out: random names)
+	0x6f, 0x81, 0xd9, 0xdb,
 }
 
 // TestOpcodeFuzz runs the game to a live state in both VMs, then from that

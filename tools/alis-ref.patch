@@ -389,7 +389,7 @@ index d31d91a..7cb7f50 100644
              printf("\n");
              ALIS_DEBUG(EDebugSystem, "The ALIS VM has been stopped.\n");
 diff --git a/src/opcodes.c b/src/opcodes.c
-index 1151bed..e56fe29 100644
+index 1151bed..e864c6a 100644
 --- a/src/opcodes.c
 +++ b/src/opcodes.c
 @@ -1030,8 +1030,52 @@ static void cswitching(void)
@@ -499,7 +499,101 @@ index 1151bed..e56fe29 100644
      if (alis.platform.version == 10)
      {
          // v1.0 handler is relative, same as cftstmov
-@@ -5755,6 +5814,7 @@ static void cescape(void)
+@@ -4815,6 +4874,18 @@ static void cnoise(void)
+ // Codopname no. 112 opcode 0x6f cinitab
+ static void cinitab(void)
+ {
++    if (alis.platform.version == 31)
++    {
++        // START.EXE 0x87b3: count-1 inline bytes
++        s16 off = (s16)script_read16();
++        u32 n = (u32)((s32)(s16)script_read16() - 1);
++        u32 dst = alis.script->vram_org + off;
++        for (u32 i = 0; i < n; i++)
++            *(alis.mem + dst + i) = *(alis.mem + alis.script->pc + i);
++        alis.script->pc += n;
++        return;
++    }
++
+     if (alis.platform.uid == EGameRobinsonsRequiem3DO)
+     {
+         s16 off = (s16)script_read16();
+@@ -4894,6 +4965,26 @@ static void cfclose(void)
+ // Codopname no. 115 opcode 0x72 cfcreat
+ static void cfcreat(void)
+ {
++    if (alis.platform.version == 31)
++    {
++        // START.EXE 0x96ad: closes the current file, creates, closes
++        char path[kPathMaxLen] = {0};
++        strcpy(path, alis.platform.path);
++        script_read_until_zero(path + strlen(alis.platform.path));
++        script_read16();
++        if (alis.fp)
++            sys_fclose(alis.fp);
++        alis.fp = NULL;
++        FILE *f = sys_fopen_b(path, 0x200);
++        if (f == NULL)
++        {
++            alis_error(ALIS_ERR_FOPEN, path);
++            return;
++        }
++        fclose(f);
++        return;
++    }
++
+     if (alis.platform.uid == EGameRobinsonsRequiem3DO)
+     {
+         char name[kPathMaxLen] = {0}, path[kPathMaxLen] = {0};
+@@ -4935,6 +5026,17 @@ static void cfcreat(void)
+ // Codopname no. 116 opcode 0x73 cfdel
+ static void cfdel(void)
+ {
++    if (alis.platform.version == 31)
++    {
++        // START.EXE 0x96c1
++        char path[kPathMaxLen] = {0};
++        strcpy(path, alis.platform.path);
++        script_read_until_zero(path + strlen(alis.platform.path));
++        if (remove(path) != 0)
++            alis_error(ALIS_ERR_FOPEN, path);
++        return;
++    }
++
+     if (alis.platform.uid == EGameRobinsonsRequiem3DO)
+     {
+         char name[kPathMaxLen] = {0}, path[kPathMaxLen] = {0};
+@@ -5014,6 +5116,16 @@ static void cfwritev(void)
+ // Codopname no. 119 opcode 0x76 cfwritei
+ static void cfwritei(void)
+ {
++    if (alis.platform.version == 31)
++    {
++        // START.EXE 0x970b: the string and its terminator
++        u8 *str = alis.mem + alis.script->pc;
++        u32 len = (u32)strlen((char *)str) + 1;
++        alis.script->pc += len;
++        fwrite(str, len, 1, alis.fp);
++        return;
++    }
++
+     if (alis.platform.uid == EGameRobinsonsRequiem3DO)
+     {
+         char name[kPathMaxLen] = {0};
+@@ -5415,6 +5527,12 @@ static void cpmode(void)
+ // Codopname no. 130 opcode 0x81 cpicture
+ static void cpicture(void)
+ {
++    if (alis.platform.version == 31)
++    {
++        readexec_opername_saveD7(); // START.EXE 0x9884
++        return;
++    }
++
+     if (alis.platform.version == 10)
+     {
+         alis.flagmain = 0;
+@@ -5755,6 +5873,7 @@ static void cescape(void)
  // Codopname no. 143 opcode 0x8e cvtstmov
  static void cvtstmov(void)
  {
@@ -507,7 +601,7 @@ index 1151bed..e56fe29 100644
      alis.wcx = (s8)xread8(alis.script->vram_org + ALIS_SCR_WCX2) + xread16(alis.script->vram_org + ALIS_SCR_WCX);
      alis.wcy = (s8)xread8(alis.script->vram_org + ALIS_SCR_WCY2) + xread16(alis.script->vram_org + ALIS_SCR_WCY);
      alis.wcz = (s8)xread8(alis.script->vram_org + ALIS_SCR_WCZ2) + xread16(alis.script->vram_org + ALIS_SCR_WCZ);
-@@ -5779,6 +5839,7 @@ static void cvtstmov_v6(void)
+@@ -5779,6 +5898,7 @@ static void cvtstmov_v6(void)
  // Codopname no. 144 opcode 0x8f cvftstmov
  static void cvftstmov(void)
  {
@@ -515,7 +609,7 @@ index 1151bed..e56fe29 100644
      alis.wcx = (s8)xread8(alis.script->vram_org + ALIS_SCR_WCX2) + xread16(alis.script->vram_org + ALIS_SCR_WCX);
      alis.wcy = (s8)xread8(alis.script->vram_org + ALIS_SCR_WCY2) + xread16(alis.script->vram_org + ALIS_SCR_WCY);
      alis.wcz = (s8)xread8(alis.script->vram_org + ALIS_SCR_WCZ2) + xread16(alis.script->vram_org + ALIS_SCR_WCZ);
-@@ -6714,9 +6775,26 @@ static void cwmov(void)
+@@ -6714,9 +6834,26 @@ static void cwmov(void)
  }
  
  // Codopname no. 164 opcode 0xa3 cwtstmov
@@ -543,7 +637,7 @@ index 1151bed..e56fe29 100644
  }
  
  // v6 dispatch target for cwtstmov
-@@ -6733,7 +6811,11 @@ static void cwtstmov_v6(void)
+@@ -6733,7 +6870,11 @@ static void cwtstmov_v6(void)
  // Codopname no. 165 opcode 0xa4 cwftstmov
  static void cwftstmov(void)
  {
@@ -556,7 +650,7 @@ index 1151bed..e56fe29 100644
  }
  
  // v6 dispatch target for cwftstmov
-@@ -6750,6 +6832,7 @@ static void cwftstmov_v6(void)
+@@ -6750,6 +6891,7 @@ static void cwftstmov_v6(void)
  // Codopname no. 166 opcode 0xa5 ctstform
  static void ctstform(void)
  {
@@ -564,7 +658,34 @@ index 1151bed..e56fe29 100644
      alis.wcx = xread16(alis.script->vram_org + ALIS_SCR_WCX);
      alis.wcy = xread16(alis.script->vram_org + ALIS_SCR_WCY);
      alis.wcz = xread16(alis.script->vram_org + ALIS_SCR_WCZ);
-@@ -9296,6 +9379,7 @@ static void ctexmap(void)
+@@ -8202,6 +8344,12 @@ static void clinepalet(void)
+ // Codopname no. 218 opcode 0xd9 cautomode
+ static void cautomode(void)
+ {
++    if (alis.platform.version == 31)
++    {
++        readexec_opername_saveD7(); // START.EXE 0xa393
++        return;
++    }
++
+     if (alis.platform.uid == EGameRobinsonsRequiem3DO)
+     {
+         readexec_opername();
+@@ -8229,6 +8377,13 @@ static void cautofile(void)
+ // Codopname no. 220 opcode 0xdb ccancel
+ static void ccancel(void)
+ {
++    if (alis.platform.version == 31)
++    {
++        alis.ferase = 1; // START.EXE 0x5cb7
++        cerase();
++        return;
++    }
++
+     ALIS_DEBUG(EDebugWarning, "MISSING: %s", __FUNCTION__);
+ }
+ 
+@@ -9296,6 +9451,7 @@ static void ctexmap(void)
          // Type 1+: sprite-based texture mapping
          readexec_opername();
          xwrite32(entry + 0x10, adresdes(alis.varD7));
@@ -572,7 +693,7 @@ index 1151bed..e56fe29 100644
          xwrite16(entry + 0x1c, xread16(alis.script->vram_org - 0xe));
          readexec_opername();
          xwrite16(entry + 0x16, alis.varD7);
-@@ -10988,6 +11072,7 @@ static void cpointpix(void)
+@@ -10988,6 +11144,7 @@ static void cpointpix(void)
      readexec_opername_saveD6();
      
      pointpix(alis.varD7, alis.varD6);
@@ -580,7 +701,7 @@ index 1151bed..e56fe29 100644
      
      alis.varD7 = image.cxtstpix;
      cstore_continue();
-@@ -11410,7 +11495,7 @@ static void cclock(void)
+@@ -11410,7 +11567,7 @@ static void cclock(void)
  // Codopname no. 018 opcode 0x11 cret
  static void cret(void)
  {
@@ -590,7 +711,7 @@ index 1151bed..e56fe29 100644
          cstop();
      }
 diff --git a/src/opernames.c b/src/opernames.c
-index d3b0040..06c6633 100644
+index d3b0040..9e9a127 100644
 --- a/src/opernames.c
 +++ b/src/opernames.c
 @@ -21,6 +21,7 @@
@@ -741,6 +862,26 @@ index d3b0040..06c6633 100644
      if (alis.platform.version == 10)
      {
          s16 offset = script_read16();
+@@ -1065,6 +1104,19 @@ void oleft(void)
+ // Opername no. 64 opcode 0x7e oright
+ void oright(void)
+ {
++    if (alis.platform.version == 31)
++    {
++        // START.EXE 0xa421: keep the last D7 characters
++        pop_sd7();
++        char *src = alis.sd7 + strlen(alis.sd7) - (s32)(s16)alis.varD7;
++        if ((uintptr_t)src <= (uintptr_t)alis.sd7)
++            src = alis.sd7;
++        char *dst = alis.sd7;
++        while ((*dst++ = *src++) != 0)
++            ;
++        return;
++    }
++
+     ALIS_DEBUG(EDebugWarning, "MISSING: %s", __FUNCTION__);
+ }
+ 
 diff --git a/src/render/rrq3d.c b/src/render/rrq3d.c
 index 6480091..118fcae 100644
 --- a/src/render/rrq3d.c

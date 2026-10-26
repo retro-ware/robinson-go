@@ -14,18 +14,26 @@ type Error struct{ Msg string }
 func (e *Error) Error() string { return e.Msg }
 
 // alisErrors are START.EXE's messages for its error screen (table 0x1c626).
-var alisErrors = map[int]string{
-	0x14: "Interdit:vecteur multiple",
-	0x1b: "him négatif - read/byte -",
-	0x1d: "him négatif - read/word -",
-	0x1f: "him négatif - write/byte -",
-	0x21: "him négatif - write/word -",
+var alisErrors = [...]string{
+	"...", "open : ", "Erreur fatale, formattage imprimante en cours", "Erreur  fatale,microprocesseur fondu",
+	"Erreur fatale, l'ecran va exploser", "trop d'entites vivantes", "programme main attendu", "write",
+	"create", "del", "trop de sprites", "debordement programmes",
+	"debordement entites", "read", "close", "No de  dessin trop grand",
+	"No de forme trop grand", "No de musique trop grand", "Interdit : Vecteur pour forme", "trop de programmes d'entites",
+	"Interdit:vecteur multiple", "Live sans load", "débordement de TABFEN", "index tableau négatif",
+	"index tableau trop grand", "near/view/approach interdit", "pointeur tableau non alloue", "him négatif - read/byte -",
+	"him sur mort - read/byte -", "him négatif - read/word -", "him sur mort - read/word -", "him négatif - write/byte -",
+	"him sur mort - write/byte -", "him négatif - write/word -", "him sur mort - write/word -",
 }
 
 // alisError is START.EXE's error screen (0x144a0): it shows the code, waits
 // for Enter (continue) or Esc (quit). The port stops the VM.
 func (v *VM) alisError(code int) {
-	v.fatal(fmt.Sprintf("%s: Error %d:%s", v.script.name, code, alisErrors[code]))
+	msg := ""
+	if code < len(alisErrors) {
+		msg = alisErrors[code]
+	}
+	v.fatal(fmt.Sprintf("%s: Error %d:%s", v.script.name, code, msg))
 }
 
 func (v *VM) fatal(msg string) {

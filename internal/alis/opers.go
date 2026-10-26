@@ -335,7 +335,20 @@ func oleft(v *VM) {
 	v.mem[v.sd7+uint32(v.varD7&0xff)] = 0
 }
 
-func oright(v *VM) {}
+// oright keeps the last D7 characters of the popped string (START.EXE 0xa421).
+func oright(v *VM) {
+	v.popSd7()
+	src := v.sd7 + uint32(v.strlen(v.sd7)) - uint32(int32(int16(v.varD7)))
+	if src <= v.sd7 {
+		src = v.sd7
+	}
+	for dst := v.sd7; ; src, dst = src+1, dst+1 {
+		v.mem[dst] = v.mem[src]
+		if v.mem[dst] == 0 {
+			break
+		}
+	}
+}
 
 func omid(v *VM) {
 	src := uint32(int32(v.sd7) + v.pop())
