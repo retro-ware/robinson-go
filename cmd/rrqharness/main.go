@@ -87,10 +87,8 @@ func (h *host) apply(e event, in *alis.Input) {
 		down := e.a == "down"
 		if e.op == "lb" {
 			in.Mouse.LB = down
-			in.Mouse.LBClicked = in.Mouse.LBClicked || down
 		} else {
 			in.Mouse.RB = down
-			in.Mouse.RBClicked = in.Mouse.RBClicked || down
 		}
 	case "quit":
 		h.stop = true

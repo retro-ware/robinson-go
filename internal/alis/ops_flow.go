@@ -822,13 +822,6 @@ func (v *VM) shrinkprog(start, length int32, id uint16) {
 	}
 	v.finprog -= uint32(length)
 
-	if v.desmouse != 0 {
-		if v.desmouse >= uint32(start+length) {
-			v.desmouse -= uint32(length)
-		} else if v.desmouse >= uint32(start) {
-			v.desmouse = 0
-		}
-	}
 	v.audioRelocate(uint32(start), uint32(start+length), -length)
 
 	if id != 0 {

@@ -65,6 +65,10 @@ func (v *VM) advanceTo(target uint64) {
 		c.now = nxt
 		v.host.WaitUntil(v.Now())
 		v.pollInput()
+		for _, code := range v.in.kb {
+			v.kbdIRQ(code)
+		}
+		v.in.kb = v.in.kb[:0]
 		if v.in.Quit || v.quit.Load() {
 			v.state = stateStopped
 		}
@@ -102,6 +106,18 @@ func (v *VM) startupTicks() {
 	}
 }
 
+// waitEvent waits for the next timer tick or input event, as the
+// original's loops that spin until an interrupt handler changes something.
+func (v *VM) waitEvent() {
+	t := v.clk.nextTick
+	if ev, ok := v.host.(EventHost); ok {
+		if at, ok := ev.NextEventUs(); ok && usToClk(at) < t {
+			t = max(usToClk(at), v.clk.now)
+		}
+	}
+	v.advanceTo(t)
+}
+
 // sleep advances virtual time by us.
 func (v *VM) sleep(us uint64) { v.advanceTo(v.clk.now + usToClk(us)) }
 
@@ -127,6 +143,8 @@ func (v *VM) itroutine() {
 		img.vtiming = prev
 	}
 	v.dosPalTick()
+	v.mouseSample()
+	v.cursorTick()
 	img.fitroutine = 0
 }
 
@@ -135,55 +153,12 @@ func (v *VM) compose(out []uint32) {
 	for i, c := range v.img.physic {
 		out[i] = v.img.mpalet[c]
 	}
-	if v.ShowCursor {
-		v.drawCursor(out)
-	}
-}
-
-// drawCursor overlays the cdefmouse sprite at the mouse position, on the
-// output only (the DOS game draws it over the screen; the harnesses leave
-// it out). Types 0x00 (4-bit, colour 0 clear), 0x10 (4-bit with palette
-// base and clear colour) and 0x14 (8-bit, colour 0 clear).
-func (v *VM) drawCursor(out []uint32) {
-	m := v.in.Mouse
-	d := v.desmouse
-	if !m.Enabled || d == 0 {
-		return
-	}
-	typ := v.mem[d]
-	w := int(v.ru16(d+2)) + 1
-	h := int(v.ru16(d+4)) + 1
-	for y := range h {
-		for x := range w {
-			var c uint8
-			var clear bool
-			switch typ {
-			case 0x00:
-				b := v.mem[d+6+uint32(y*(w/2)+x/2)]
-				c = b >> 4
-				if x%2 == 1 {
-					c = b & 0xf
-				}
-				clear = c == 0
-			case 0x10:
-				b := v.mem[d+8+uint32(y*(w/2)+x/2)]
-				c = b >> 4
-				if x%2 == 1 {
-					c = b & 0xf
-				}
-				clear = c == v.mem[d+7]
-				c += v.mem[d+6]
-			case 0x14:
-				c = v.mem[d+8+uint32(y*w+x)]
-				clear = c == 0
-			default:
-				return
-			}
-			px, py := m.X+x, m.Y+y
-			if clear || px >= gameWidth || py >= gameHeight {
-				continue
-			}
-			out[py*gameWidth+px] = v.img.mpalet[c]
+	if v.ShowCursor && v.cursor.shown >= 0 && v.cursor.sprite != 0 {
+		scr := v.cursorScratch[:]
+		copy(scr, v.img.physic)
+		v.cursorBlit(scr, v.cursor.x, v.cursor.y)
+		for i, c := range scr {
+			out[i] = v.img.mpalet[c]
 		}
 	}
 }

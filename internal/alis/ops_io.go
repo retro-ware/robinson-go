@@ -399,50 +399,43 @@ func clinking(v *VM) {
 	v.w16(v.script.vramOrg-0x2a, int16(v.varD7))
 }
 
-func cmouson(v *VM)  { v.enableMouse(true) }
-func cmousoff(v *VM) { v.enableMouse(false) }
-
-func (v *VM) enableMouse(on bool) {
-	v.in.Mouse.Enabled = on
-	if !on {
-		v.desmouse = 0
+// cmouson shows the cursor (START.EXE 0x988a).
+func cmouson(v *VM) {
+	if !v.mouse.present || v.cursor.shown >= 0 {
+		return
 	}
-	v.dirtyMouse = true
+	v.cursor.x, v.cursor.y, _ = v.mouseRead()
+	v.cursorDraw()
+	v.cursor.shown = 1
+	v.cursor.lock = 0xff
 }
 
-func (v *VM) consumeMouse() Mouse {
-	m := v.in.Mouse
-	v.in.Mouse.LBClicked = false
-	v.in.Mouse.RBClicked = false
-	return m
+// cmousoff hides the cursor (START.EXE 0x98b1).
+func cmousoff(v *VM) {
+	if !v.mouse.present || v.cursor.shown < 0 {
+		return
+	}
+	v.cursor.shown = -1
+	v.cursorRestore()
 }
 
+// cmouse stores x, y and the buttons (START.EXE 0x98d1).
 func cmouse(v *VM) {
-	m := v.consumeMouse()
-	v.varD7 = int32(m.X)
+	x, y, b := v.mouseRead()
+	v.varD7 = int32(x)
 	v.cstoreContinue()
-	v.varD7 = int32(m.Y)
+	v.varD7 = int32(y)
 	v.cstoreContinue()
-	// the mouse driver's button word (START.EXE 0x2876): bit 0 left, bit 1 right
-	v.varD7 = 0
-	if m.LB || m.LBClicked {
-		v.varD7 |= 1
-	}
-	if m.RB || m.RBClicked {
-		v.varD7 |= 2
-	}
+	v.varD7 = int32(b)
 	v.cstoreContinue()
 }
 
+// cdefmouse sets the cursor sprite (START.EXE 0x98f1).
 func cdefmouse(v *VM) {
 	v.flagmain = 0
 	v.readexecOpername()
 	addr := uint32(v.adresdes(v.varD7))
-	ptr := addr + uint32(v.r32(addr))
-	if b := v.mem[ptr]; b == 0 || b == 0x10 || b == 0x14 {
-		v.desmouse = ptr
-		v.dirtyMouse = true
-	}
+	v.cursor.sprite = addr + uint32(v.r32(addr))
 }
 
 // csetmouse (START.EXE 0x9a22): x by getval, y by 0x9d17, which leaves it
@@ -454,6 +447,5 @@ func csetmouse(v *VM) {
 	v.readexecOpername()
 	y := uint16(v.varD7)
 	v.varD6, v.varD7 = v.varD7, d7
-	v.in.Mouse.X = int(x)
-	v.in.Mouse.Y = int(y)
+	v.setMouse(int16(x), int16(y))
 }

@@ -245,22 +245,13 @@ func osgn(v *VM) {
 
 func onot(v *VM) { v.varD7 = ^v.varD7 }
 
-func oinkey(v *VM) {
-	if v.automode != 0 {
-		v.varD7 = int32(v.prevkey)
-		return
-	}
-	v.prevkey = int16(v.ioInkey())
-	v.varD7 = int32(v.prevkey)
-}
+// oinkey is the code of the key down, 0 when none (START.EXE 0xa39f).
+func oinkey(v *VM) { v.varD7 = int32(v.kbd.last) }
 
 func okeyon(v *VM) {}
 
-func ojoy(v *VM) {
-	if v.automode == 0 {
-		v.varD7 = int32(v.ioJoy(uint8(v.varD7)))
-	}
-}
+// ojoy reads joystick 0 (START.EXE 0x253f); there is none.
+func ojoy(v *VM) { v.varD7 = 0 }
 
 func oprnd(v *VM) {
 	result := uint32(v.pop())
@@ -289,13 +280,8 @@ func oscan(v *VM) {
 	v.varD7 = int32(result)
 }
 
-func oshiftkey(v *VM) {
-	if v.automode != 0 {
-		v.varD7 = 0
-		return
-	}
-	v.varD7 = int32(v.ioShiftkey())
-}
+// oshiftkey is the shift bits (START.EXE 0xa3ba).
+func oshiftkey(v *VM) { v.varD7 = int32(v.kbd.mods) }
 
 func (v *VM) ioDfree() int16 { return 32000 } // KB free for saves (capped as the original)
 
@@ -328,7 +314,7 @@ func ofree(v *VM) {
 
 func omodel(v *VM) { v.varD7 = 2000 }
 
-func ogetkey(v *VM) { v.varD7 = int32(v.ioGetkey()) }
+func ogetkey(v *VM) { v.varD7 = int32(v.getkey()) }
 
 func oleft(v *VM) {
 	v.popSd7()
@@ -456,11 +442,8 @@ func ochange(v *VM)  { v.varD7 = 0 }
 func ocountry(v *VM) { v.varD7 = int32(v.pays) }
 func omip(v *VM)     { v.varD7 = 0x64 }
 
-func ojoykey(v *VM) {
-	if v.automode == 0 {
-		v.varD7 = int32(v.ioJoykey(uint8(v.varD7)))
-	}
-}
+// ojoykey is 0 (START.EXE 0xa3dd).
+func ojoykey(v *VM) { v.varD7 = 0 }
 
 func oconfig(v *VM) { v.varD7 = int32(v.theconfig) }
 

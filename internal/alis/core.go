@@ -79,7 +79,7 @@ func (v *VM) init() {
 	v.aud.musicID = 0xffff
 	v.restartLoop = false
 	v.automode = 0
-	v.theconfig = 0x44 // mouse driver, fast CD (START.EXE 0x2753, 0x330b)
+	v.theconfig = 0x40 // fast CD (START.EXE 0x330b); initInput adds the mouse
 
 	v.img = image{}
 	v.dosPalReset()
@@ -120,7 +120,6 @@ func (v *VM) init() {
 	v.nbent = 0
 	v.ptrent = 0
 	v.ctiming = 0
-	v.prevkey = 0
 	v.varD6, v.varD7 = 0, 0
 
 	v.bsd7 = 0x1a1e6
@@ -152,7 +151,6 @@ func (v *VM) init() {
 	}
 	v.script = v.main
 	v.basemain = v.main.vramOrg
-	v.desmouse = 0
 
 	v.img.zoombid = 0x20de2
 	v.img.landdata = 0x1ccc2
@@ -503,6 +501,7 @@ func (v *VM) Run() (err error) {
 	v.state = stateRunning
 	v.cstopret = 0
 	v.varD5 = 0
+	v.initInput()
 	v.startupTicks()
 
 	for v.state != stateStopped {

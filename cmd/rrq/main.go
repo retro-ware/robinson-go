@@ -165,19 +165,9 @@ func main() {
 		down := action == glfw.Press
 		switch b {
 		case glfw.MouseButtonLeft:
-			h.event(func(in *alis.Input) {
-				in.Mouse.LB = down
-				if down {
-					in.Mouse.LBClicked = true
-				}
-			})
+			h.event(func(in *alis.Input) { in.Mouse.LB = down })
 		case glfw.MouseButtonRight:
-			h.event(func(in *alis.Input) {
-				in.Mouse.RB = down
-				if down {
-					in.Mouse.RBClicked = true
-				}
-			})
+			h.event(func(in *alis.Input) { in.Mouse.RB = down })
 		}
 	})
 

@@ -29,76 +29,36 @@ type Host interface {
 	Time() (h, m, s int)
 }
 
-// Mouse is the pointer state as the game sees it (game pixels).
+// Mouse is the mouse driver's state in game pixels; the game samples it
+// on every timer tick.
 type Mouse struct {
-	X, Y      int
-	LB, RB    bool
-	LBClicked bool // latched presses, cleared when a script reads the mouse
-	RBClicked bool
-	Enabled   bool
+	X, Y   int
+	LB, RB bool
 }
 
-// Input is the keyboard and mouse state. Keys are indexed by USB/SDL
-// scancode; Button is the last key pressed (scancode and keycode).
+// Input is what the host reports: key presses as they happen (PC
+// scancodes queued for the game's keyboard handler) and the mouse.
 type Input struct {
-	Keys      [kScancodes]bool
-	Mods      uint16
-	ButtonSc  int
-	ButtonSym int32
-	Mouse     Mouse
-	Quit      bool
+	kb    []uint8
+	Mouse Mouse
+	Quit  bool
 }
 
-// KeyDown records a key press like an SDL key event.
-func (in *Input) KeyDown(sc int) {
-	if sc <= 0 || sc >= kScancodes {
+// KeyDown queues the press of a key (USB HID scancode).
+func (in *Input) KeyDown(sc int) { in.key(sc, 0) }
+
+// KeyUp queues the release of a key.
+func (in *Input) KeyUp(sc int) { in.key(sc, 0x80) }
+
+func (in *Input) key(sc int, up uint8) {
+	code, ext := pcScancode(sc)
+	if code == 0 {
 		return
 	}
-	in.Keys[sc] = true
-	in.Mods |= modBit(sc)
-	in.ButtonSc = sc
-	in.ButtonSym = scancodeToKeycode(sc)
-}
-
-// KeyUp records a key release.
-func (in *Input) KeyUp(sc int) {
-	if sc <= 0 || sc >= kScancodes {
-		return
+	if ext {
+		in.kb = append(in.kb, 0xe0)
 	}
-	in.Keys[sc] = false
-	in.Mods &^= modBit(sc)
-}
-
-// SDL keyboard modifier bits.
-const (
-	kmodLShift = 0x0001
-	kmodRShift = 0x0002
-	kmodLCtrl  = 0x0040
-	kmodRCtrl  = 0x0080
-	kmodLAlt   = 0x0100
-	kmodRAlt   = 0x0200
-	kmodCaps   = 0x2000
-	kmodShift  = kmodLShift | kmodRShift
-	kmodCtrl   = kmodLCtrl | kmodRCtrl
-	kmodAlt    = kmodLAlt | kmodRAlt
-)
-
-func modBit(sc int) uint16 {
-	switch sc {
-	case ScLShift:
-		return kmodLShift
-	case ScRShift:
-		return kmodRShift
-	case ScLCtrl:
-		return kmodLCtrl
-	case ScRCtrl:
-		return kmodRCtrl
-	case ScLAlt:
-		return kmodLAlt
-	case ScRAlt:
-		return kmodRAlt
-	}
-	return 0
+	in.kb = append(in.kb, code|up)
 }
 
 // FileSys gives the VM the game files: reads come from the save directory

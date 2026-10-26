@@ -121,7 +121,7 @@ func cgettime(v *VM) {
 func (v *VM) readLine(digits bool) {
 	p := v.sd7
 	for v.state != stateStopped {
-		c := v.ioGetkey()
+		c := v.getkey()
 		if c == '\r' {
 			break
 		}

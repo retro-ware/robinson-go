@@ -1,127 +1,177 @@
 package alis
 
-// Keyboard and joystick reads (alis sys.c io_*), SDL key semantics.
+// Keyboard and mouse as START.EXE reads them: the keyboard interrupt
+// handler keeps a key-down table, the code of the last key and the shift
+// bits; the timer handler samples the mouse driver on every tick.
 
-func (v *VM) ioInkey() uint8 {
-	in := &v.in
-	if in.ButtonSc <= 0 || !in.Keys[in.ButtonSc] {
-		in.ButtonSc, in.ButtonSym = 0, 0
+type kbdState struct {
+	tab  [128]uint8 // key code of scancode-1 (layout)
+	down [128]bool  // 0x18b6c
+	last uint8      // 0x18b68: key code of the last key pressed, 0 when released
+	mods uint8      // 0x18b6a: 1 right shift, 2 left shift, 4 ctrl, 8 alt
+}
+
+// initInput reads the keyboard layout and whether to use the mouse from
+// START.STP (START.EXE 0x9de: letter 13, digit 11); without one it is the
+// 'Q' layout with a mouse.
+func (v *VM) initInput() {
+	layout, mouse := byte('Q'), true
+	if stp, err := v.fs.ReadFile("START.STP"); err == nil && len(stp) >= 14 {
+		layout, mouse = stp[13], stp[11] != '0'
 	}
-	switch in.ButtonSc {
-	case ScEscape:
-		return 0x1b
-	case ScUp:
-		return 0xc8
-	case ScDown:
-		return 0xd0
-	case ScLeft:
-		return 0xcb
-	case ScRight:
-		return 0xcd
-	case ScKP0:
-		return '0'
-	case ScKPPlus:
-		return '+'
-	case ScKPMinus:
-		return '-'
-	case ScLShift, ScRShift, ScLCtrl, ScRCtrl, ScLAlt, ScRAlt, ScCapsLock:
+	v.initKeyboard(layout)
+	v.cursor.shown = -1
+	if mouse {
+		v.initMouse()
+		v.theconfig |= 4
+	}
+}
+
+// initKeyboard sets the layout table from START.STP's keyboard letter and
+// the country it implies (START.EXE 0x2268).
+func (v *VM) initKeyboard(layout byte) {
+	k := &v.kbd
+	k.tab = keytab
+	v.pays = 0
+	switch layout {
+	case 'A':
+		v.pays = 1
+		copy(k.tab[0x0e:], keytabA[:])
+	case 'Z':
+		v.pays = 2
+		copy(k.tab[0x0e:], keytabZ[:])
+	}
+}
+
+// kbdIRQ is the keyboard interrupt handler (START.EXE 0x2326) for one
+// scancode. An 0xE0 prefix is the release of scancode 0x60.
+func (v *VM) kbdIRQ(code uint8) {
+	k := &v.kbd
+	i := int(code&0x7f) - 1
+	if i < 0 {
+		return // the original touches the byte before its tables
+	}
+	if code&0x80 == 0 {
+		k.down[i] = true
+		if i >= 0x70 {
+			return
+		}
+		switch c := k.tab[i]; c {
+		case 0xe0, 0xe1, 0xe2, 0xe3:
+			k.mods |= modBits[c-0xe0]
+		case 0xfe:
+		default:
+			k.last = c
+		}
+		return
+	}
+	k.down[i] = false
+	switch c := k.tab[i]; c {
+	case 0xe0, 0xe1, 0xe2, 0xe3:
+		k.mods &^= modBits[c-0xe0]
+	case 0xfe:
+	default:
+		k.last = k.held()
+	}
+	// Ctrl+Alt with '.' or 'S' as the last key makes the original call
+	// itself until the stack overflows (0x23d3); not reproduced.
+}
+
+var modBits = [4]uint8{2, 1, 4, 8}
+
+// held is the code of the highest key still down (START.EXE 0x2440).
+func (k *kbdState) held() uint8 {
+	for i := 127; i >= 0; i-- {
+		if k.down[i] {
+			if c := k.tab[i]; c < 0xe0 || c > 0xe3 {
+				return c
+			}
+		}
+	}
+	return 0
+}
+
+// getkey waits for a key press and its release and returns the key's
+// code (START.EXE 0x2485).
+func (v *VM) getkey() uint8 {
+	for v.kbd.last == 0 && v.state != stateStopped {
+		v.waitEvent()
+	}
+	r := v.kbd.last
+	for v.kbd.last != 0 && v.state != stateStopped {
+		v.waitEvent()
+	}
+	return r
+}
+
+// mouseState is the game's copy of the mouse (START.EXE 0x18e3b-0x18e43)
+// and the offset csetmouse adds to it (0x18a98).
+type mouseState struct {
+	present    bool // driver found and enabled in START.STP (0x16068 == 0)
+	x, y, b    int16
+	offx, offy int16
+}
+
+const (
+	mouseScreenW = gameWidth  // 0x178ef
+	mouseScreenH = gameHeight // 0x178f1
+)
+
+func clampMouse(v, n int16) int16 {
+	if v < 0 {
 		return 0
 	}
-	if in.ButtonSc >= ScKP1 && in.ButtonSc <= ScKP9 {
-		return uint8('1' + in.ButtonSc - ScKP1)
+	if v >= n {
+		return n - 1
 	}
-	if in.ButtonSc >= ScF1 && in.ButtonSc <= ScF10 {
-		return uint8(0xbb + in.ButtonSc - ScF1)
-	}
-	if in.Mods&kmodShift != 0 || in.Keys[ScLShift] || in.Keys[ScRShift] {
-		if in.ButtonSc >= Sc1 && in.ButtonSc <= Sc0 {
-			return "!@#$%^&*()"[in.ButtonSc-Sc1]
-		}
-		switch in.ButtonSc {
-		case ScMinus:
-			return '_'
-		case ScEquals:
-			return '+'
-		}
-	}
-	return uint8(in.ButtonSym)
+	return v
 }
 
-func (v *VM) ioShiftkey() uint8 {
-	in := &v.in
-	k := &in.Keys
-	s := v.shift
-	set := func(on bool, bit uint8) {
-		if on {
-			s |= bit
-		} else {
-			s &^= bit
-		}
-	}
-	set(k[ScRShift], 1)
-	set(k[ScLShift], 2)
-	set(k[ScRCtrl] || k[ScLCtrl], 4)
-	set(k[ScRAlt] || k[ScLAlt], 8)
-	set(in.Mods&kmodCaps != 0, 16)
-	v.shift = s
-	return s
+// initMouse is START.EXE 0x2676 with a driver present: the centre, then a
+// first sample of the driver.
+func (v *VM) initMouse() {
+	m := &v.mouse
+	m.x, m.y, m.b = mouseScreenW/2, mouseScreenH/2, 0
+	m.present = true
+	v.mouseSample()
 }
 
-// ioGetkey waits for a key press and its release.
-func (v *VM) ioGetkey() uint8 {
-	var r uint8
-	for v.state != stateStopped {
-		if r = v.ioInkey(); r != 0 {
-			break
-		}
-		v.sleep(eventTicksUs)
+// mouseSample copies the driver's state (START.EXE 0x27fa, run by the
+// timer handler). The driver's x runs 0..639.
+func (v *VM) mouseSample() {
+	m := &v.mouse
+	if !m.present {
+		return
 	}
-	for v.state != stateStopped && v.ioInkey() != 0 {
-		v.sleep(eventTicksUs)
+	in := v.in.Mouse
+	m.b = 0
+	if in.LB {
+		m.b |= 1
 	}
-	return r
+	if in.RB {
+		m.b |= 2
+	}
+	m.x = clampMouse(int16(in.X*2)>>1, mouseScreenW)
+	m.y = clampMouse(int16(in.Y), mouseScreenH)
 }
 
-func (v *VM) joyCompose(mouseFire bool) uint8 {
-	k := &v.in.Keys
-	var b uint8
-	if k[ScUp] || k[ScKP1+7] || k[ScKP1+6] || k[ScKP9] {
-		b |= 1
+// mouseRead is the position with the csetmouse offset and the buttons
+// (START.EXE 0x2876); -1, -1, 0 without a mouse.
+func (v *VM) mouseRead() (x, y, b int16) {
+	m := &v.mouse
+	if !m.present {
+		return -1, -1, 0
 	}
-	if k[ScDown] || k[ScKP1+1] || k[ScKP1] || k[ScKP1+2] {
-		b |= 2
-	}
-	if k[ScLeft] || k[ScKP1+3] || k[ScKP1+6] || k[ScKP1] {
-		b |= 4
-	}
-	if k[ScRight] || k[ScKP1+5] || k[ScKP9] || k[ScKP1+2] {
-		b |= 8
-	}
-	if mouseFire && v.in.Mouse.LB {
-		b |= 0x80
-	}
-	return b
+	return clampMouse(m.x+m.offx, mouseScreenW), clampMouse(m.y+m.offy, mouseScreenH), m.b
 }
 
-func (v *VM) ioJoy(port uint8) uint8 {
-	if port != 0 {
-		return v.joyCompose(false)
+// setMouse makes the mouse read as x, y from now on (START.EXE 0x28f1); a
+// negative x drops the offset.
+func (v *VM) setMouse(x, y int16) {
+	m := &v.mouse
+	if x < 0 {
+		m.offx, m.offy = 0, 0
+		return
 	}
-	return v.joyCompose(true)
-}
-
-func (v *VM) ioJoykey(test uint8) uint8 {
-	var r uint8
-	if test == 0 {
-		if v.joyCompose(true)&0x80 != 0 {
-			r = 1
-		}
-		if v.shift&4 != 0 {
-			r |= 2
-		}
-		if v.shift&8 != 0 {
-			r |= 4
-		}
-	}
-	return r
+	m.offx, m.offy = x-m.x, y-m.y
 }

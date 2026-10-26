@@ -93,11 +93,15 @@ type VM struct {
 	// OnDraw, if set, runs at each draw before the frame wait.
 	OnDraw func()
 
-	host Host
-	fs   *FileSys
-	in   Input
-	err  *Error
-	quit atomic.Bool
+	host          Host
+	fs            *FileSys
+	in            Input
+	kbd           kbdState
+	mouse         mouseState
+	cursor        cursorState
+	cursorScratch [gameWidth * gameHeight]byte
+	err           *Error
+	quit          atomic.Bool
 
 	clk clock // virtual time
 
@@ -145,9 +149,7 @@ type VM struct {
 	fremouse  uint8
 	fremouse2 uint8
 	oldmouse  uint16
-	desmouse  uint32 // 0 = none
 
-	prevkey   int16
 	theconfig int16
 
 	wcx, wcy, wcz int16
@@ -248,7 +250,5 @@ type VM struct {
 	px1, py1, pz1, px2, py2, pz2 int16
 
 	timeOffset int
-	dirtyMouse bool
-	shift      uint8
 	starbuff   [7]int16
 }
