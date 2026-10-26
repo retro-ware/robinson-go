@@ -63,32 +63,32 @@ func (s sprite) creducing() uint8    { return s[0x1d] }
 func (s sprite) setCreducing(x uint8) {
 	s[0x1d] = x
 }
-func (s sprite) clinking() int16      { return s.s16(0x1e) }
-func (s sprite) setClinking(x int16)  { s.set16(0x1e, x) }
-func (s sprite) cordspr() uint8       { return s[0x20] }
-func (s sprite) setCordspr(x uint8)   { s[0x20] = x }
-func (s sprite) chsprite() uint8      { return s[0x21] }
-func (s sprite) setChsprite(x uint8)  { s[0x21] = x }
-func (s sprite) scriptEnt() uint16    { return s.u16(0x22) }
+func (s sprite) clinking() int16       { return s.s16(0x1e) }
+func (s sprite) setClinking(x int16)   { s.set16(0x1e, x) }
+func (s sprite) cordspr() uint8        { return s[0x20] }
+func (s sprite) setCordspr(x uint8)    { s[0x20] = x }
+func (s sprite) chsprite() uint8       { return s[0x21] }
+func (s sprite) setChsprite(x uint8)   { s[0x21] = x }
+func (s sprite) scriptEnt() uint16     { return s.u16(0x22) }
 func (s sprite) setScriptEnt(x uint16) { s.setu16(0x22, x) }
-func (s sprite) sprite0x28() uint32   { return binary.LittleEndian.Uint32(s[0x24:]) }
+func (s sprite) sprite0x28() uint32    { return binary.LittleEndian.Uint32(s[0x24:]) }
 func (s sprite) setSprite0x28(x uint32) {
 	binary.LittleEndian.PutUint32(s[0x24:], x)
 }
-func (s sprite) width() int16           { return s.s16(0x28) }
-func (s sprite) setWidth(x int16)       { s.set16(0x28, x) }
-func (s sprite) height() int16          { return s.s16(0x2a) }
-func (s sprite) setHeight(x int16)      { s.set16(0x2a, x) }
-func (s sprite) newzoomx() uint16       { return s.u16(0x2c) }
-func (s sprite) setNewzoomx(x uint16)   { s.setu16(0x2c, x) }
-func (s sprite) newzoomy() uint16       { return s.u16(0x2e) }
-func (s sprite) setNewzoomy(x uint16)   { s.setu16(0x2e, x) }
-func (s sprite) unknown0x30() uint16    { return s.u16(0x30) }
+func (s sprite) width() int16            { return s.s16(0x28) }
+func (s sprite) setWidth(x int16)        { s.set16(0x28, x) }
+func (s sprite) height() int16           { return s.s16(0x2a) }
+func (s sprite) setHeight(x int16)       { s.set16(0x2a, x) }
+func (s sprite) newzoomx() uint16        { return s.u16(0x2c) }
+func (s sprite) setNewzoomx(x uint16)    { s.setu16(0x2c, x) }
+func (s sprite) newzoomy() uint16        { return s.u16(0x2e) }
+func (s sprite) setNewzoomy(x uint16)    { s.setu16(0x2e, x) }
+func (s sprite) unknown0x30() uint16     { return s.u16(0x30) }
 func (s sprite) setUnknown0x30(x uint16) { s.setu16(0x30, x) }
-func (s sprite) unknown0x32() uint16    { return s.u16(0x32) }
+func (s sprite) unknown0x32() uint16     { return s.u16(0x32) }
 func (s sprite) setUnknown0x32(x uint16) { s.setu16(0x32, x) }
-func (s sprite) prev() uint16           { return s.u16(0x34) }
-func (s sprite) setPrev(x uint16)       { s.setu16(0x34, x) }
+func (s sprite) prev() uint16            { return s.u16(0x34) }
+func (s sprite) setPrev(x uint16)        { s.setu16(0x34, x) }
 
 // screen records live in the main script's vram at basemain+idx.
 const (
@@ -119,8 +119,8 @@ func (v *VM) scrToNext(idx uint16) uint16    { return v.ru16(v.sca(idx) + scToNe
 
 // vram context fields below an entity's vram_org (alis get_0xNN_*)
 func (v *VM) screenIDOf(vram uint32) uint16 { return v.ru16(vram - 0x16) }
-func (v *VM) curScreenID() uint16          { return v.ru16(v.script.vramOrg - 0x16) }
-func (v *VM) elemHead() uint16             { return v.ru16(v.script.vramOrg - 0x18) }
-func (v *VM) setElemHead(x uint16)         { v.wu16(v.script.vramOrg-0x18, x) }
+func (v *VM) curScreenID() uint16           { return v.ru16(v.script.vramOrg - 0x16) }
+func (v *VM) elemHead() uint16              { return v.ru16(v.script.vramOrg - 0x18) }
+func (v *VM) setElemHead(x uint16)          { v.wu16(v.script.vramOrg-0x18, x) }
 func (v *VM) xinv(vram uint32) uint8        { return v.mem[vram-0x03] }
 func (v *VM) cforme(vram uint32) int16      { return v.r16(vram - 0x1a) }

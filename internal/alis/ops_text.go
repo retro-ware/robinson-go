@@ -38,7 +38,7 @@ func (v *VM) putAt(main bool, invert uint8, at bool) {
 		v.readexecOpername()
 		v.img.depx, v.img.depy, v.img.depz = 0, 0, 0
 		v.img.numelem = 0
-		v.put(int16(v.varD7))
+		v.put(uint16(v.varD7))
 		return
 	}
 	v.readexecOpernameSaveD7()
@@ -50,7 +50,7 @@ func (v *VM) putAt(main bool, invert uint8, at bool) {
 	v.readexecOpernameSaveD7()
 	v.readexecOpernameSaveD6()
 	v.img.numelem = int8(v.varD6)
-	v.put(int16(v.varD7))
+	v.put(uint16(v.varD7))
 }
 
 func cxput(v *VM)    { v.putAt(false, v.xinv(v.script.vramOrg)^1, false) }
@@ -152,7 +152,7 @@ func (v *VM) sendmess(vram uint32, idx uint16) {
 func casleepfar(v *VM) {
 	v.readexecOpername()
 	norme := uint32(v.varD7&0xffff) * uint32(v.varD7&0xffff)
-	v.valnorme = int32(norme)
+	v.valnorme = norme
 	me := v.script.vramOrg
 	ent := int16(0)
 	for {

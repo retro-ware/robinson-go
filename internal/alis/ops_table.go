@@ -268,5 +268,6 @@ func init() {
 	codesc1[2] = func(v *VM) { v.aud.fsound = 0 }
 	codesc1[3] = func(v *VM) { v.aud.fmusic = 1 }
 	codesc1[4] = func(v *VM) { v.aud.fmusic = 0 }
-	// TODO: codesc1 5 cdelfilm, 6 copenfilm once the film player is ported.
+	codesc1[5] = cdelfilm
+	codesc1[6] = copenfilm
 }

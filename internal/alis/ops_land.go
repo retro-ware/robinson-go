@@ -102,8 +102,9 @@ func cfilm(v *VM) {
 	v.film.id = int16(v.varD7)
 	v.readexecOpername()
 	addr := uint32(v.adresdes(v.varD7)) + 0x20 + 4
-	v.film.addr1 = addr
-	v.film.addr2 = addr
+	v.film.buf = v.mem
+	v.film.addr1 = int(addr)
+	v.film.addr2 = int(addr)
 	v.readexecOpername()
 	v.film.waitclock = int16(v.varD7)
 	v.film.basemain = v.basemain

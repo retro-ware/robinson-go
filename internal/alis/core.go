@@ -42,6 +42,7 @@ func (v *VM) Err() error {
 }
 
 func (v *VM) init() {
+	v.initClock()
 	v.cdspeed = 0x493e0
 	v.pays = 0
 	v.render3dInit()
@@ -704,5 +705,7 @@ func (v *VM) afopen(name string, openmode uint16) File {
 	return fp
 }
 
-func be32(b []byte) uint32 { return uint32(b[0])<<24 | uint32(b[1])<<16 | uint32(b[2])<<8 | uint32(b[3]) }
+func be32(b []byte) uint32 {
+	return uint32(b[0])<<24 | uint32(b[1])<<16 | uint32(b[2])<<8 | uint32(b[3])
+}
 func be16(b []byte) uint16 { return uint16(b[0])<<8 | uint16(b[1]) }

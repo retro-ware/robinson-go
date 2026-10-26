@@ -100,7 +100,7 @@ func cputmap(v *VM) {
 	if sp := v.spr(newidx); sp.state() > -1 {
 		sp.setState(2)
 	}
-	v.putmapin(newidx, m-0x3dc)
+	v.putmapin(newidx, int32(m-0x3dc))
 	if v.searchelem(&newidx, &oldidx) {
 		sp := v.spr(newidx)
 		sp.setCredonOff(-1)

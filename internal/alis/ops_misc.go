@@ -134,7 +134,7 @@ func cengine(v *VM) {}
 
 func cquality(v *VM) {
 	v.readexecOpername()
-	v.vquality = int16(v.varD7)
+	v.vquality = uint16(v.varD7)
 }
 
 func chsprite(v *VM) {

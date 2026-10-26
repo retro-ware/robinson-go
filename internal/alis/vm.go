@@ -4,6 +4,8 @@
 // checked against the original START.EXE.
 package alis
 
+import "sync/atomic"
+
 const (
 	maxScripts = 512
 
@@ -86,7 +88,13 @@ type specs struct {
 // VM is the whole machine state (alis sAlisVM plus the image, audio and
 // screen globals).
 type VM struct {
-	sys System // host services: files, input, timing
+	host Host
+	fs   *FileSys
+	in   Input
+	err  *Error
+	quit atomic.Bool
+
+	clk clock // virtual time
 
 	mem   []byte
 	state vmState
@@ -127,20 +135,20 @@ type VM struct {
 	matent   [256]int16
 
 	// mouse
-	mousflag uint8
-	fmouse   uint8
+	mousflag  uint8
+	fmouse    uint8
 	fremouse  uint8
 	fremouse2 uint8
-	oldmouse uint16
-	desmouse uint32 // 0 = none
+	oldmouse  uint16
+	desmouse  uint32 // 0 = none
 
 	prevkey   int16
 	theconfig int16
 
 	wcx, wcy, wcz int16
-	wforme       int16
-	matmask      int16
-	poldy, poldx int16
+	wforme        int16
+	matmask       int16
+	poldy, poldx  int16
 
 	acc    uint32 // virtual accumulator stack pointer (offset in mem)
 	accOrg uint32
@@ -169,7 +177,7 @@ type VM struct {
 	sd7, sd6, oldsd7    uint32
 
 	vstandard uint32
-	autoname  string
+	autoname  [13]byte
 	tabptr    uint32
 
 	buffer [1024]byte
@@ -221,8 +229,19 @@ type VM struct {
 
 	cdspeed uint32
 
-	img   image
-	aud   audioState
-	scr   screenState
-	video videoState
+	img      image
+	aud      audioState
+	scr      screenState
+	film     film
+	filmnode uint16
+
+	land land
+	walk walkState
+
+	px1, py1, pz1, px2, py2, pz2 int16
+
+	timeOffset int
+	dirtyMouse bool
+	shift      uint8
+	starbuff   [7]int16
 }

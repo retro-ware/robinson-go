@@ -68,7 +68,9 @@ func odirtp(v *VM) {
 	v.strcpy(v.sd7, uint32(addr))
 }
 
-func odirtc(v *VM) { v.varD7 = int32(int8(v.r8(uint32(v.tabchar(v.script.vramOrg + uint32(v.read8())))))) }
+func odirtc(v *VM) {
+	v.varD7 = int32(int8(v.r8(uint32(v.tabchar(v.script.vramOrg + uint32(v.read8()))))))
+}
 func odirti(v *VM) { v.varD7 = int32(v.r16(uint32(v.tabint(v.script.vramOrg + uint32(v.read8()))))) }
 
 func (v *VM) mainAt(off int16) uint32 { return uint32(int32(v.basemain) + int32(off)) }

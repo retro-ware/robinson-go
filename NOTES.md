@@ -55,3 +55,7 @@ put/putin/putmapin, affiscr/fenetre/destofen, blitters, requiem map, DOS palette
 screen.c (scadd/scbreak/scdosprite/vectoriel), rrq3d (openland/affiland/landtopix/landtofi/
 pointpix), FLI films, audio (channels, playsample/runson, mv2 tracker, mixer), the virtual-clock
 scheduler/harness and the GLFW+wgpu host.
+- alis sys_init runs before the platform is known, so sys_timeclock_hz is 50
+  although the ISR ticks every 17 ms: palette fades step on every tick and
+  waitclock films wait waitclock*50/60 ticks. The Go port copies this
+  (timeclockHz); check START.EXE.

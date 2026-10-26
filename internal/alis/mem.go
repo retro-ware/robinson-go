@@ -6,15 +6,15 @@ import "encoding/binary"
 // PC). These are alis' xread/xwrite accessors (mem.h); offsets wrap like the
 // u32 arithmetic of the original.
 
-func (v *VM) r8(o uint32) uint8   { return v.mem[o] }
-func (v *VM) r16(o uint32) int16  { return int16(binary.LittleEndian.Uint16(v.mem[o:])) }
-func (v *VM) r32(o uint32) int32  { return int32(binary.LittleEndian.Uint32(v.mem[o:])) }
+func (v *VM) r8(o uint32) uint8    { return v.mem[o] }
+func (v *VM) r16(o uint32) int16   { return int16(binary.LittleEndian.Uint16(v.mem[o:])) }
+func (v *VM) r32(o uint32) int32   { return int32(binary.LittleEndian.Uint32(v.mem[o:])) }
 func (v *VM) ru16(o uint32) uint16 { return binary.LittleEndian.Uint16(v.mem[o:]) }
 func (v *VM) ru32(o uint32) uint32 { return binary.LittleEndian.Uint32(v.mem[o:]) }
 
-func (v *VM) w8(o uint32, x uint8)   { v.mem[o] = x }
-func (v *VM) w16(o uint32, x int16)  { binary.LittleEndian.PutUint16(v.mem[o:], uint16(x)) }
-func (v *VM) w32(o uint32, x int32)  { binary.LittleEndian.PutUint32(v.mem[o:], uint32(x)) }
+func (v *VM) w8(o uint32, x uint8)    { v.mem[o] = x }
+func (v *VM) w16(o uint32, x int16)   { binary.LittleEndian.PutUint16(v.mem[o:], uint16(x)) }
+func (v *VM) w32(o uint32, x int32)   { binary.LittleEndian.PutUint32(v.mem[o:], uint32(x)) }
 func (v *VM) wu16(o uint32, x uint16) { binary.LittleEndian.PutUint16(v.mem[o:], x) }
 func (v *VM) wu32(o uint32, x uint32) { binary.LittleEndian.PutUint32(v.mem[o:], x) }
 
