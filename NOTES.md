@@ -49,12 +49,18 @@ every 20 ms.
 
 ## Port status
 
-Opcode handlers are all ported (internal/alis/ops_*.go, table in ops_table.go). The package does
-not compile yet: missing are the VM struct rewrite (vm.go), image.c pipeline (sprite lists,
-put/putin/putmapin, affiscr/fenetre/destofen, blitters, requiem map, DOS palette, itroutine),
-screen.c (scadd/scbreak/scdosprite/vectoriel), rrq3d (openland/affiland/landtopix/landtofi/
-pointpix), FLI films, audio (channels, playsample/runson, mv2 tracker, mixer), the virtual-clock
-scheduler/harness and the GLFW+wgpu host.
+Everything runs: VM, image pipeline, screens, the rrq3d landscape (DOS path), FLI films, sample
+audio, the deterministic harness (cmd/rrqharness) and the native GLFW+wgpu+oto host (cmd/rrq).
+`go test ./cmd/rrqharness` replays testdata/{attract,start,walk}.txt and requires the CRC log to
+equal the C reference log (testdata/*.c.log) frame for frame.
+
+The C reference converts 4-bit sprites to 8-bit in place at load (ALIS_CONV_INPLACE), so its
+script addresses sit higher than the original's (and the Go port's); the rendered output is the same.
+
+Audio still missing (none of it fires in the scripted sessions or 5 min of play):
+- the mv1/mv2 music players (the `music` opcode is never executed in the sessions seen so far);
+- the OPL2 effect channels (DingZap/Noise/Explode, `runson`): alis renders them with emu8950
+  using register settings taken from Ishar 2; ioCanal is a no-op.
 - alis sys_init runs before the platform is known, so sys_timeclock_hz is 50
   although the ISR ticks every 17 ms: palette fades step on every tick and
   waitclock films wait waitclock*50/60 ticks. The Go port copies this
