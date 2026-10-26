@@ -21,7 +21,7 @@ every 20 ms.
 
 - `cescape`: truncates `calscal` to s16.
 - `csetmouse`: y comes from a stale D6.
-- `cfreadb`: returns before reading the length operand when the handle is empty.
+- `cfreadb`: a non-positive pointer cell is error 26 (START.EXE 0x9796); alis checked the second dereference.
 - `walkland` head bob sampling; `landalti` flag==1 pointer add is a no-op.
 - `cgettime`: alis returns 0,0,0; original returns the DOS time.
 - `cnul` (0x00, 0x37, 0x8b): alis stops the VM; the original returns (port and reference follow).

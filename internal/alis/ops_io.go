@@ -283,11 +283,13 @@ func cfreadb(v *VM) {
 	cell := v.readVaddr()
 	addr := int32(cell)
 	if int8(v.r8(uint32(addr)-1)) < 0 {
+		// START.EXE 0x9796: the pointer cell must be positive (error 26)
 		addr = v.r32(uint32(addr))
-		addr = v.r32(uint32(addr))
-		if addr < 1 {
+		if addr <= 0 {
+			v.alisError(0x1a)
 			return
 		}
+		addr = v.r32(uint32(addr))
 	}
 	length := uint32(v.read32())
 	if v.typepack == 0 {
