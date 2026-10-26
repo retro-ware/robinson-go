@@ -445,12 +445,15 @@ func cdefmouse(v *VM) {
 	}
 }
 
-// TODO(START.EXE): alis takes y from the stale D6.
+// csetmouse (START.EXE 0x9a22): x by getval, y by 0x9d17, which leaves it
+// in D6 and restores D7; alis took y from the stale D6.
 func csetmouse(v *VM) {
 	v.readexecOpername()
 	x := uint16(v.varD7)
+	d7 := v.varD7
 	v.readexecOpername()
-	y := uint16(v.varD6)
+	y := uint16(v.varD7)
+	v.varD6, v.varD7 = v.varD7, d7
 	v.in.Mouse.X = int(x)
 	v.in.Mouse.Y = int(y)
 }

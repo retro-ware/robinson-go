@@ -19,8 +19,6 @@ every 20 ms.
 
 ## alis behaviour still to check against START.EXE
 
-- `cescape`: truncates `calscal` to s16.
-- `csetmouse`: y comes from a stale D6.
 - `cfreadb`: a non-positive pointer cell is error 26 (START.EXE 0x9796); alis checked the second dereference.
 - `walkland` head bob sampling; `landalti` flag==1 pointer add is a no-op.
 - `cgettime`: alis returns 0,0,0; original returns the DOS time.
@@ -88,6 +86,8 @@ Reference bugs found this way (fixed in the reference, the port follows START.EX
   vram == 0 (alis set it only for alocb/alocw/adirb/adirw).
 - `cdefworld` copies 5 bytes in a row (alis: 6 bytes to one address); `cworld` writes the word
   at vram-0x22 (alis: vram+0xffde).
+- `cescape` compares signed 32-bit products (alis: s16); capproach/cescape test only the
+  16-bit operand against -1; `csetmouse` takes y from its second operand (alis: stale D6).
 - Camera words of the current screen (missing in alis): cscamov/cscaset 0x34 (add/set),
   csczoom 0x3a, cscsun 0x7c (four words); the screen is looked up after the operands.
 - The test opcodes latch the own mirror flag (0x1602e) for monoform; cavtstmov doesn't set it.

@@ -53,7 +53,7 @@ func (v *VM) setApproach(index int8, best uint32) {
 
 func capproach(v *VM) {
 	v.readexecOpername()
-	if v.varD7 == -1 {
+	if int16(v.varD7) == -1 {
 		return
 	}
 	a, wcx, wcy, wcz := v.debApproach(v.varD7)
@@ -75,10 +75,11 @@ func capproach(v *VM) {
 	v.setApproach(index, best)
 }
 
-// TODO(START.EXE): alis truncates the dot product to s16 here only.
+// cescape picks the direction with the smallest product (START.EXE 0x9c66,
+// signed 32-bit; alis truncated it to s16).
 func cescape(v *VM) {
 	v.readexecOpername()
-	if v.varD7 == -1 {
+	if int16(v.varD7) == -1 {
 		return
 	}
 	a, wcx, wcy, wcz := v.debApproach(v.varD7)
@@ -86,7 +87,7 @@ func cescape(v *VM) {
 	limit := int32(0x7fffffff)
 	index := int8(v.varD6)
 	for {
-		if test := int32(int16(v.calscal(a, wcx, wcy, wcz))); test < limit {
+		if test := v.calscal(a, wcx, wcy, wcz); test < limit {
 			index = int8(v.varD7)
 			limit = test
 			best = a
