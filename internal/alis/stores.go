@@ -114,7 +114,13 @@ func (v *VM) cstoreContinue() {
 	v.readexecStorename()
 }
 
-// add destinations; the x86 add sets the zero flag cloop tests
+// add destinations; the x86 add sets the zero flag cloop tests, the string
+// forms leave it set (terminator test) and the stack push clears it
+
+func (v *VM) strcatZero(dst, src uint32) {
+	v.strcat(dst, src)
+	v.srZero = true
+}
 
 func (v *VM) addZero8(addr uint32, x uint8) {
 	v.mem[addr] += x
@@ -129,73 +135,74 @@ func (v *VM) addZero16(addr uint32, x int16) {
 
 func alocb(v *VM) { v.addZero8(v.vramAt(int32(v.read16())), uint8(v.varD7)) }
 func alocw(v *VM) { v.addZero16(v.vramAt(int32(v.read16())), int16(v.varD7)) }
-func alocp(v *VM) { v.strcat(v.vramAt(int32(v.read16())), v.oldsd7) }
+func alocp(v *VM) { v.strcatZero(v.vramAt(int32(v.read16())), v.oldsd7) }
 
 func aloctp(v *VM) {
 	addr := v.tabstring(v.vramAt(int32(v.read16())))
-	v.strcat(uint32(addr), v.oldsd7)
+	v.strcatZero(uint32(addr), v.oldsd7)
 }
 
-// TODO: alis leaves the zero flag alone for these adds; check START.EXE.
 func aloctc(v *VM) {
 	addr := v.tabchar(v.vramAt(int32(v.read16())))
 	v.varD7 = v.pop()
-	v.add8(uint32(addr), int8(v.varD7))
+	v.addZero8(uint32(addr), uint8(v.varD7))
 }
 
 func alocti(v *VM) {
 	addr := v.tabint(v.vramAt(int32(v.read16())))
 	v.varD7 = v.pop()
-	v.add16(uint32(addr), int16(v.varD7))
+	v.addZero16(uint32(addr), int16(v.varD7))
 }
 
 func adirb(v *VM) { v.addZero8(v.script.vramOrg+uint32(v.read8()), uint8(v.varD7)) }
 func adirw(v *VM) { v.addZero16(v.script.vramOrg+uint32(v.read8()), int16(v.varD7)) }
-func adirp(v *VM) { v.strcat(v.script.vramOrg+uint32(v.read8()), v.oldsd7) }
+func adirp(v *VM) { v.strcatZero(v.script.vramOrg+uint32(v.read8()), v.oldsd7) }
 
 func adirtp(v *VM) {
 	addr := v.tabstring(v.script.vramOrg + uint32(v.read8()))
-	v.strcat(uint32(addr), v.oldsd7)
+	v.strcatZero(uint32(addr), v.oldsd7)
 }
 
 func adirtc(v *VM) {
 	addr := v.tabchar(v.script.vramOrg + uint32(v.read8()))
 	v.varD7 = v.pop()
-	v.add8(uint32(addr), int8(v.varD7))
+	v.addZero8(uint32(addr), uint8(v.varD7))
 }
 
 func adirti(v *VM) {
 	addr := v.tabint(v.script.vramOrg + uint32(v.read8()))
 	v.varD7 = v.pop()
-	v.add16(uint32(addr), int16(v.varD7))
+	v.addZero16(uint32(addr), int16(v.varD7))
 }
 
-func amainb(v *VM) { v.add8(v.mainAt(v.read16()), int8(v.varD7)) }
-func amainw(v *VM) { v.add16(v.mainAt(v.read16()), int16(v.varD7)) }
-func amainp(v *VM) { v.strcat(v.mainAt(v.read16()), v.oldsd7) }
+func amainb(v *VM) { v.addZero8(v.mainAt(v.read16()), uint8(v.varD7)) }
+func amainw(v *VM) { v.addZero16(v.mainAt(v.read16()), int16(v.varD7)) }
+func amainp(v *VM) { v.strcatZero(v.mainAt(v.read16()), v.oldsd7) }
 
 func amaintp(v *VM) {
 	addr := v.tabstring(v.mainAt(v.read16()))
-	v.strcat(uint32(addr), v.oldsd7)
+	v.strcatZero(uint32(addr), v.oldsd7)
 }
 
 func amaintc(v *VM) {
 	addr := v.tabchar(v.mainAt(v.read16()))
 	v.varD7 = v.pop()
-	v.add8(uint32(addr), int8(v.varD7))
+	v.addZero8(uint32(addr), uint8(v.varD7))
 }
 
 func amainti(v *VM) {
 	addr := v.tabint(v.mainAt(v.read16()))
 	v.varD7 = v.pop()
-	v.add16(uint32(addr), int16(v.varD7))
+	v.addZero16(uint32(addr), int16(v.varD7))
 }
 
 func ahimb(v *VM) {
 	vram := v.himEnt(v.read16(), 0x1f)
 	off := v.read16()
 	if vram > 0 {
-		v.add8(uint32(vram+int32(off)), int8(v.varD7))
+		v.addZero8(uint32(vram+int32(off)), uint8(v.varD7))
+	} else {
+		v.srZero = vram == 0
 	}
 }
 
@@ -203,27 +210,34 @@ func ahimw(v *VM) {
 	vram := v.himEnt(v.read16(), 0x21)
 	off := v.read16()
 	if vram > 0 {
-		v.add16(uint32(vram+int32(off)), int16(v.varD7))
+		v.addZero16(uint32(vram+int32(off)), int16(v.varD7))
+	} else {
+		v.srZero = vram == 0
 	}
 }
 
 func ahimp(v *VM) {
 	vram := v.himEnt(v.read16(), 0)
-	v.strcat(uint32(vram+int32(v.read16())), v.oldsd7)
+	v.strcatZero(uint32(vram+int32(v.read16())), v.oldsd7)
 }
 
-func ahimtp(v *VM) { v.strcat(uint32(v.tabstring(v.himTab())), v.oldsd7) }
+func ahimtp(v *VM) { v.strcatZero(uint32(v.tabstring(v.himTab())), v.oldsd7) }
 
 func ahimtc(v *VM) {
 	addr := v.tabchar(v.himTab())
 	v.varD7 = v.pop()
-	v.add8(uint32(addr), int8(v.varD7))
+	v.addZero8(uint32(addr), uint8(v.varD7))
 }
 
 func ahimti(v *VM) {
 	addr := v.tabint(v.himTab())
 	v.varD7 = v.pop()
-	v.add16(uint32(addr), int16(v.varD7))
+	v.addZero16(uint32(addr), int16(v.varD7))
+}
+
+func apile(v *VM) {
+	v.push(v.varD7)
+	v.srZero = false
 }
 
 func aeval(v *VM) {
@@ -245,7 +259,7 @@ func init() {
 		pnul, pnul, pnul, alocb, alocw, alocp, aloctp, aloctc, alocti,
 		adirb, adirw, adirp, adirtp, adirtc, adirti,
 		amainb, amainw, amainp, amaintp, amaintc, amainti,
-		ahimb, ahimw, ahimp, ahimtp, ahimtc, ahimti, spile, aeval, ofin,
+		ahimb, ahimw, ahimp, ahimtp, ahimtc, ahimti, apile, aeval, ofin,
 	} {
 		addnames[i*2] = f
 	}

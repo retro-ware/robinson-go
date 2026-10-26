@@ -26,8 +26,6 @@ every 20 ms.
 - `cfreadb`: returns before reading the length operand when the handle is empty.
 - `walkland` head bob sampling; `landalti` flag==1 pointer add is a no-op.
 - `cgettime`: alis returns 0,0,0; original returns the DOS time.
-- addnames: alis sets the zero flag only for alocb/alocw/adirb/adirw (x86 `add` sets ZF always),
-  `cloop` reads it.
 - `cnul` (0x00, 0x37, 0x8b): alis stops the VM; the original returns (port and reference follow).
 - `shrinkprog` resets `vacc_off` of shifted entities (only matters for the running one).
 - `copenfilm`: alis maps "150." films to "300.".
@@ -87,6 +85,9 @@ Reference bugs found this way (fixed in the reference, the port follows START.EX
   cfindmat loads goodmat from matent (original bug, kept). cnearcla/cviewcla take a word
   operand; START.EXE's nearest-only path there swaps bx/dx as 16-bit registers and corrupts
   its pointers, so the port follows the other searches.
+- Zero flag after an add destination (`cloop`): every byte/word add sets it from the result,
+  the string forms leave it set, the stack push clears it, a dead ahimb/ahimw sets it to
+  vram == 0 (alis set it only for alocb/alocw/adirb/adirw).
 - Camera words of the current screen (missing in alis): cscamov/cscaset 0x34 (add/set),
   csczoom 0x3a, cscsun 0x7c (four words); the screen is looked up after the operands.
 - The test opcodes latch the own mirror flag (0x1602e) for monoform; cavtstmov doesn't set it.
