@@ -19,15 +19,13 @@ every 20 ms.
 
 ## alis behaviour still to check against START.EXE
 
-- `cfreadb`: a non-positive pointer cell is error 26 (START.EXE 0x9796); alis checked the second dereference.
 - `walkland` head bob sampling; `landalti` flag==1 pointer add is a no-op.
 - `cgettime`: alis returns 0,0,0; original returns the DOS time.
-- `cnul` (0x00, 0x37, 0x8b): alis stops the VM; the original returns (port and reference follow).
 - `shrinkprog` resets `vacc_off` of shifted entities (only matters for the running one).
 - `copenfilm`: alis maps "150." films to "300.".
 - Sound: alis plays czap/cexplode/cding/cnoise on an emulated YM2149 (Atari); the DOS engine
   renders them for the Sound Blaster.
-- `csend`: queue-full handling; `cmouse`: both buttons; `cfreadv`/`cfwritev`: big-endian words.
+- `csend`: queue-full handling.
 - `cbackstar`: mode byte taken from basemain+1; `ctexmap`: opaque-row scan and y_mask snap;
  `csettime`/`cgettime`: host clock + offset.
 - `affiscr`: alis holds `linkidx` (clinking) in a u16, so the `linkidx >= 0` / `< 0` sign tests
@@ -89,6 +87,9 @@ Reference bugs found this way (fixed in the reference, the port follows START.EX
 - `cescape` compares signed 32-bit products (alis: s16); capproach/cescape test only the
   16-bit operand against -1; `csetmouse` takes y from its second operand (alis: stale D6).
 - `cdarkpal`: unsigned first/count, darkness flag from all 0x2fd words after entry 0 (alis: 0xb6).
+- `cfreadb`: a non-positive pointer cell is error 26 (0x9796); `cnul` (0x00, 0x37, 0x8b) returns.
+- `cmouse` returns the driver button word (both buttons = 3; alis: 1); cfreadv/cfwritev are
+  big-endian as in alis.
 - Camera words of the current screen (missing in alis): cscamov/cscaset 0x34 (add/set),
   csczoom 0x3a, cscsun 0x7c (four words); the screen is looked up after the operands.
 - The test opcodes latch the own mirror flag (0x1602e) for monoform; cavtstmov doesn't set it.

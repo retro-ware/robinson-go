@@ -423,13 +423,13 @@ func cmouse(v *VM) {
 	v.cstoreContinue()
 	v.varD7 = int32(m.Y)
 	v.cstoreContinue()
-	switch {
-	case m.LB || m.LBClicked:
-		v.varD7 = 1
-	case m.RB || m.RBClicked:
-		v.varD7 = 2
-	default:
-		v.varD7 = 0
+	// the mouse driver's button word (START.EXE 0x2876): bit 0 left, bit 1 right
+	v.varD7 = 0
+	if m.LB || m.LBClicked {
+		v.varD7 |= 1
+	}
+	if m.RB || m.RBClicked {
+		v.varD7 |= 2
 	}
 	v.cstoreContinue()
 }
