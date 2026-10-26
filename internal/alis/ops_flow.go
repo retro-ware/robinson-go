@@ -2,7 +2,8 @@ package alis
 
 // Control flow, expressions and entity life cycle opcodes (alis opcodes.c).
 
-func cnul(v *VM) { v.fatal(v.script.name + ": cnul opcode") }
+// cnul is a bare ret in START.EXE (0x38ef); alis stops the VM.
+func cnul(v *VM) {}
 
 func cesc1(v *VM) { v.readexecCodesc1() }
 func cesc2(v *VM) { v.readexecCodesc2() }

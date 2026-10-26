@@ -152,7 +152,6 @@ func clinepalet(v *VM) {
 	v.readexecOpernameSaveD6()
 }
 
-// TODO(START.EXE): alis has no v3 cautomode (no operands).
 // cautomode evaluates its operand and does nothing else (START.EXE 0xa393).
 func cautomode(v *VM) { v.readexecOpernameSaveD7() }
 

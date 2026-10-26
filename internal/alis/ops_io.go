@@ -93,8 +93,6 @@ func cnoise(v *VM) {
 	v.runson(chanNoise, pereson, priorson, volson, freqson, longson, sfxDvol(volson, longson), 0)
 }
 
-// TODO(START.EXE): alis has no v3 cinitab/cfcreat/cfdel/cfwritei/cpicture;
-// they consume no operands.
 // cinitab copies its inline bytes (count-1 of them) to a variable of the
 // running script (START.EXE 0x87b3).
 func cinitab(v *VM) {

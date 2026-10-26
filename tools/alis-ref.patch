@@ -646,10 +646,20 @@ index 0000000..ef222b4
 +    crstent();
 +}
 diff --git a/src/opcodes.c b/src/opcodes.c
-index 1151bed..d6bf704 100644
+index 1151bed..875becf 100644
 --- a/src/opcodes.c
 +++ b/src/opcodes.c
-@@ -1030,8 +1030,52 @@ static void cswitching(void)
+@@ -379,6 +379,9 @@ static s16 getprot(void);
+ // Codesc1name no. 01 opcode 0x00 -> cnul
+ void cnul(void)
+ {
++    if (alis.platform.version == 31)
++        return; // START.EXE 0x38ef: ret
++
+ #if VM_IGNORE_ERRORS == 0
+     printf("\n");
+     ALIS_DEBUG(EDebugFatal, disalis ? "ERROR: %s" : "%s", "[N/I] cnul: NULL opcode called\n");
+@@ -1030,8 +1033,52 @@ static void cswitching(void)
      alis.fswitch = 1;
  }
  
@@ -702,7 +712,7 @@ index 1151bed..d6bf704 100644
      readexec_opername();
      
      s16 index = alis.varD7;
-@@ -2519,7 +2563,7 @@ s32 monoform(s32 ent_vram, s32 ent_formedata, s32 formedata, s32 ent_baseform, s
+@@ -2519,7 +2566,7 @@ s32 monoform(s32 ent_vram, s32 ent_formedata, s32 formedata, s32 ent_baseform, s
          return 1;
      }
  
@@ -711,7 +721,7 @@ index 1151bed..d6bf704 100644
      {
          frmx = -frmx;
          px2 = -px2;
-@@ -3634,6 +3678,7 @@ static void v6_tstscan_elem(void)
+@@ -3634,6 +3681,7 @@ static void v6_tstscan_elem(void)
  // Codopname no. 084 opcode 0x53 ctstmov
  static void ctstmov(void)
  {
@@ -719,7 +729,7 @@ index 1151bed..d6bf704 100644
      readexec_opername();
      alis.wcx = xread16(alis.script->vram_org + ALIS_SCR_WCX) + alis.varD7;
      readexec_opername();
-@@ -3685,7 +3730,19 @@ static void ctstset(void)
+@@ -3685,7 +3733,19 @@ static void ctstset(void)
          return;
      }
  
@@ -740,7 +750,7 @@ index 1151bed..d6bf704 100644
  }
  
  // v6 dispatch target for ctstset
-@@ -3710,6 +3767,7 @@ static void ctstset_v6(void)
+@@ -3710,6 +3770,7 @@ static void ctstset_v6(void)
  // Codopname no. 086 opcode 0x55 cftstmov
  static void cftstmov(void)
  {
@@ -748,7 +758,7 @@ index 1151bed..d6bf704 100644
      readexec_opername();
      alis.wcx = xread16(alis.script->vram_org + ALIS_SCR_WCX) + alis.varD7;
      readexec_opername();
-@@ -3740,6 +3798,7 @@ static void cftstmov_v6(void)
+@@ -3740,6 +3801,7 @@ static void cftstmov_v6(void)
  // Codopname no. 087 opcode 0x56 cftstset
  static void cftstset(void)
  {
@@ -756,7 +766,7 @@ index 1151bed..d6bf704 100644
      if (alis.platform.version == 10)
      {
          // v1.0 handler is relative, same as cftstmov
-@@ -4256,9 +4315,17 @@ static void near_v6(int kind)
+@@ -4256,9 +4318,17 @@ static void near_v6(int kind)
      crstent();
  }
  
@@ -774,7 +784,7 @@ index 1151bed..d6bf704 100644
      if (alis.platform.version >= 60)
      {
          near_v6(1);
-@@ -4275,6 +4342,12 @@ void cnearent(void)
+@@ -4275,6 +4345,12 @@ void cnearent(void)
  // Codopname no. 091 opcode 0x5a cneartyp
  static void cneartyp(void)
  {
@@ -787,7 +797,7 @@ index 1151bed..d6bf704 100644
      if (alis.platform.version >= 60)
      {
          near_v6(0);
-@@ -4299,6 +4372,12 @@ static void cneartyp(void)
+@@ -4299,6 +4375,12 @@ static void cneartyp(void)
  // Codopname no. 092 opcode 0x5b cnearmat
  static void cnearmat(void)
  {
@@ -800,7 +810,7 @@ index 1151bed..d6bf704 100644
      if (alis.platform.version >= 60)
      {
          near_v6(2);
-@@ -4316,6 +4395,12 @@ static void cnearmat(void)
+@@ -4316,6 +4398,12 @@ static void cnearmat(void)
  // Codopname no. 093 opcode 0x5c cviewent
  static void cviewent(void)
  {
@@ -813,7 +823,7 @@ index 1151bed..d6bf704 100644
      if (alis.platform.version >= 60)
      {
          near_v6(1);
-@@ -4334,6 +4419,12 @@ static void cviewent(void)
+@@ -4334,6 +4422,12 @@ static void cviewent(void)
  // Codopname no. 094 opcode 0x5d cviewtyp
  static void cviewtyp(void)
  {
@@ -826,7 +836,7 @@ index 1151bed..d6bf704 100644
      if (alis.platform.version >= 60)
      {
          near_v6(0);
-@@ -4360,6 +4451,12 @@ static void cviewtyp(void)
+@@ -4360,6 +4454,12 @@ static void cviewtyp(void)
  // Codopname no. 095 opcode 0x5e cviewmat
  static void cviewmat(void)
  {
@@ -839,7 +849,7 @@ index 1151bed..d6bf704 100644
      if (alis.platform.version >= 60)
      {
          near_v6(2);
-@@ -4815,6 +4912,18 @@ static void cnoise(void)
+@@ -4815,6 +4915,18 @@ static void cnoise(void)
  // Codopname no. 112 opcode 0x6f cinitab
  static void cinitab(void)
  {
@@ -858,7 +868,7 @@ index 1151bed..d6bf704 100644
      if (alis.platform.uid == EGameRobinsonsRequiem3DO)
      {
          s16 off = (s16)script_read16();
-@@ -4894,6 +5003,26 @@ static void cfclose(void)
+@@ -4894,6 +5006,26 @@ static void cfclose(void)
  // Codopname no. 115 opcode 0x72 cfcreat
  static void cfcreat(void)
  {
@@ -885,7 +895,7 @@ index 1151bed..d6bf704 100644
      if (alis.platform.uid == EGameRobinsonsRequiem3DO)
      {
          char name[kPathMaxLen] = {0}, path[kPathMaxLen] = {0};
-@@ -4935,6 +5064,17 @@ static void cfcreat(void)
+@@ -4935,6 +5067,17 @@ static void cfcreat(void)
  // Codopname no. 116 opcode 0x73 cfdel
  static void cfdel(void)
  {
@@ -903,7 +913,7 @@ index 1151bed..d6bf704 100644
      if (alis.platform.uid == EGameRobinsonsRequiem3DO)
      {
          char name[kPathMaxLen] = {0}, path[kPathMaxLen] = {0};
-@@ -5014,6 +5154,16 @@ static void cfwritev(void)
+@@ -5014,6 +5157,16 @@ static void cfwritev(void)
  // Codopname no. 119 opcode 0x76 cfwritei
  static void cfwritei(void)
  {
@@ -920,7 +930,7 @@ index 1151bed..d6bf704 100644
      if (alis.platform.uid == EGameRobinsonsRequiem3DO)
      {
          char name[kPathMaxLen] = {0};
-@@ -5412,9 +5562,31 @@ static void cpmode(void)
+@@ -5412,9 +5565,31 @@ static void cpmode(void)
      image.line_a_mode = alis.varD7;
  }
  
@@ -952,7 +962,7 @@ index 1151bed..d6bf704 100644
      if (alis.platform.version == 10)
      {
          alis.flagmain = 0;
-@@ -5755,6 +5927,7 @@ static void cescape(void)
+@@ -5755,6 +5930,7 @@ static void cescape(void)
  // Codopname no. 143 opcode 0x8e cvtstmov
  static void cvtstmov(void)
  {
@@ -960,7 +970,7 @@ index 1151bed..d6bf704 100644
      alis.wcx = (s8)xread8(alis.script->vram_org + ALIS_SCR_WCX2) + xread16(alis.script->vram_org + ALIS_SCR_WCX);
      alis.wcy = (s8)xread8(alis.script->vram_org + ALIS_SCR_WCY2) + xread16(alis.script->vram_org + ALIS_SCR_WCY);
      alis.wcz = (s8)xread8(alis.script->vram_org + ALIS_SCR_WCZ2) + xread16(alis.script->vram_org + ALIS_SCR_WCZ);
-@@ -5779,6 +5952,7 @@ static void cvtstmov_v6(void)
+@@ -5779,6 +5955,7 @@ static void cvtstmov_v6(void)
  // Codopname no. 144 opcode 0x8f cvftstmov
  static void cvftstmov(void)
  {
@@ -968,7 +978,7 @@ index 1151bed..d6bf704 100644
      alis.wcx = (s8)xread8(alis.script->vram_org + ALIS_SCR_WCX2) + xread16(alis.script->vram_org + ALIS_SCR_WCX);
      alis.wcy = (s8)xread8(alis.script->vram_org + ALIS_SCR_WCY2) + xread16(alis.script->vram_org + ALIS_SCR_WCY);
      alis.wcz = (s8)xread8(alis.script->vram_org + ALIS_SCR_WCZ2) + xread16(alis.script->vram_org + ALIS_SCR_WCZ);
-@@ -5920,6 +6094,12 @@ static void cworld(void)
+@@ -5920,6 +6097,12 @@ static void cworld(void)
  // Codopname no. 148 opcode 0x93 cfindmat
  static void cfindmat(void)
  {
@@ -981,7 +991,7 @@ index 1151bed..d6bf704 100644
      if (alis.platform.version == 10)
      {
          readexec_opername();
-@@ -5965,6 +6145,12 @@ static void cfindmat_v6(void)
+@@ -5965,6 +6148,12 @@ static void cfindmat_v6(void)
  // Codopname no. 149 opcode 0x94 cfindtyp
  static void cfindtyp(void)
  {
@@ -994,7 +1004,7 @@ index 1151bed..d6bf704 100644
      if (alis.platform.version >= 60)
      {
          readexec_opername_swap();
-@@ -6714,9 +6900,26 @@ static void cwmov(void)
+@@ -6714,9 +6903,26 @@ static void cwmov(void)
  }
  
  // Codopname no. 164 opcode 0xa3 cwtstmov
@@ -1022,7 +1032,7 @@ index 1151bed..d6bf704 100644
  }
  
  // v6 dispatch target for cwtstmov
-@@ -6733,7 +6936,11 @@ static void cwtstmov_v6(void)
+@@ -6733,7 +6939,11 @@ static void cwtstmov_v6(void)
  // Codopname no. 165 opcode 0xa4 cwftstmov
  static void cwftstmov(void)
  {
@@ -1035,7 +1045,7 @@ index 1151bed..d6bf704 100644
  }
  
  // v6 dispatch target for cwftstmov
-@@ -6750,6 +6957,7 @@ static void cwftstmov_v6(void)
+@@ -6750,6 +6960,7 @@ static void cwftstmov_v6(void)
  // Codopname no. 166 opcode 0xa5 ctstform
  static void ctstform(void)
  {
@@ -1043,7 +1053,7 @@ index 1151bed..d6bf704 100644
      alis.wcx = xread16(alis.script->vram_org + ALIS_SCR_WCX);
      alis.wcy = xread16(alis.script->vram_org + ALIS_SCR_WCY);
      alis.wcz = xread16(alis.script->vram_org + ALIS_SCR_WCZ);
-@@ -7795,6 +8003,12 @@ static void cfindcla(void)
+@@ -7795,6 +8006,12 @@ static void cfindcla(void)
  // Codopname no. 204 opcode 0xcb cnearcla
  static void cnearcla(void)
  {
@@ -1056,7 +1066,7 @@ index 1151bed..d6bf704 100644
      if (alis.platform.version >= 60)
      {
          near_v6(2);
-@@ -7807,6 +8021,12 @@ static void cnearcla(void)
+@@ -7807,6 +8024,12 @@ static void cnearcla(void)
  // Codopname no. 205 opcode 0xcc cviewcla
  static void cviewcla(void)
  {
@@ -1069,7 +1079,7 @@ index 1151bed..d6bf704 100644
      if (alis.platform.version >= 60)
      {
          near_v6(2);
-@@ -8202,6 +8422,12 @@ static void clinepalet(void)
+@@ -8202,6 +8425,12 @@ static void clinepalet(void)
  // Codopname no. 218 opcode 0xd9 cautomode
  static void cautomode(void)
  {
@@ -1082,7 +1092,7 @@ index 1151bed..d6bf704 100644
      if (alis.platform.uid == EGameRobinsonsRequiem3DO)
      {
          readexec_opername();
-@@ -8229,6 +8455,13 @@ static void cautofile(void)
+@@ -8229,6 +8458,13 @@ static void cautofile(void)
  // Codopname no. 220 opcode 0xdb ccancel
  static void ccancel(void)
  {
@@ -1096,7 +1106,7 @@ index 1151bed..d6bf704 100644
      ALIS_DEBUG(EDebugWarning, "MISSING: %s", __FUNCTION__);
  }
  
-@@ -9076,6 +9309,12 @@ static void csavepal(void)
+@@ -9076,6 +9312,12 @@ static void csavepal(void)
  // Codopname no. 232 opcode 0xe7 csczoom
  static void csczoom(void)
  {
@@ -1109,7 +1119,7 @@ index 1151bed..d6bf704 100644
      if (alis.platform.uid == EGameRobinsonsRequiem3DO)
      {
          if (xread16(alis.script->vram_org - 0x64) != 0)
-@@ -9296,6 +9535,7 @@ static void ctexmap(void)
+@@ -9296,6 +9538,7 @@ static void ctexmap(void)
          // Type 1+: sprite-based texture mapping
          readexec_opername();
          xwrite32(entry + 0x10, adresdes(alis.varD7));
@@ -1117,7 +1127,7 @@ index 1151bed..d6bf704 100644
          xwrite16(entry + 0x1c, xread16(alis.script->vram_org - 0xe));
          readexec_opername();
          xwrite16(entry + 0x16, alis.varD7);
-@@ -9466,6 +9706,12 @@ static void cfreetab(void)
+@@ -9466,6 +9709,12 @@ static void cfreetab(void)
  // Codopname no. 238 opcode 0xed cscsun
  static void cscsun(void)
  {
@@ -1130,7 +1140,7 @@ index 1151bed..d6bf704 100644
      if (alis.platform.version < 60)
      {
          ALIS_DEBUG(EDebugWarning, "MISSING: %s", __FUNCTION__);
-@@ -9900,12 +10146,24 @@ void cdefvectnat(void)
+@@ -9900,12 +10149,24 @@ void cdefvectnat(void)
  // Codopname no. 243 opcode 0xf2 cscaset
  static void cscaset(void)
  {
@@ -1155,7 +1165,7 @@ index 1151bed..d6bf704 100644
      ALIS_DEBUG(EDebugWarning, "MISSING: %s", __FUNCTION__);
  }
  
-@@ -10988,6 +11246,7 @@ static void cpointpix(void)
+@@ -10988,6 +11249,7 @@ static void cpointpix(void)
      readexec_opername_saveD6();
      
      pointpix(alis.varD7, alis.varD6);
@@ -1163,7 +1173,7 @@ index 1151bed..d6bf704 100644
      
      alis.varD7 = image.cxtstpix;
      cstore_continue();
-@@ -11410,7 +11669,7 @@ static void cclock(void)
+@@ -11410,7 +11672,7 @@ static void cclock(void)
  // Codopname no. 018 opcode 0x11 cret
  static void cret(void)
  {

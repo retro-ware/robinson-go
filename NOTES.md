@@ -28,7 +28,7 @@ every 20 ms.
 - `cgettime`: alis returns 0,0,0; original returns the DOS time.
 - addnames: alis sets the zero flag only for alocb/alocw/adirb/adirw (x86 `add` sets ZF always),
   `cloop` reads it.
-- `cnul`: alis stops the VM; the original returns.
+- `cnul` (0x00, 0x37, 0x8b): alis stops the VM; the original returns (port and reference follow).
 - `shrinkprog` resets `vacc_off` of shifted entities (only matters for the running one).
 - `copenfilm`: alis maps "150." films to "300.".
 - Sound: alis plays czap/cexplode/cding/cnoise on an emulated YM2149 (Atari); the DOS engine
