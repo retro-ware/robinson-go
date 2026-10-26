@@ -13,6 +13,20 @@ type Error struct{ Msg string }
 
 func (e *Error) Error() string { return e.Msg }
 
+// alisErrors are START.EXE's messages for its error screen (table 0x1c626).
+var alisErrors = map[int]string{
+	0x1b: "him négatif - read/byte -",
+	0x1d: "him négatif - read/word -",
+	0x1f: "him négatif - write/byte -",
+	0x21: "him négatif - write/word -",
+}
+
+// alisError is START.EXE's error screen (0x144a0): it shows the code, waits
+// for Enter (continue) or Esc (quit). The port stops the VM.
+func (v *VM) alisError(code int) {
+	v.fatal(fmt.Sprintf("%s: Error %d:%s", v.script.name, code, alisErrors[code]))
+}
+
 func (v *VM) fatal(msg string) {
 	if v.err == nil {
 		v.err = &Error{msg}

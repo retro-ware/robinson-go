@@ -330,3 +330,127 @@ func TestUnpackRandom(t *testing.T) {
 		}
 	}
 }
+
+// runHost is the rrqharness host without logging: deterministic rand, noon,
+// and a stop at maxUs.
+type runHost struct {
+	nullHost
+	rnd   uint32
+	maxUs uint64
+}
+
+func (h *runHost) Random() uint16 {
+	h.rnd = h.rnd*1103515245 + 12345
+	return uint16(h.rnd >> 16 & 0x7fff)
+}
+func (h *runHost) PollInput(us uint64, in *Input) {
+	if us >= h.maxUs {
+		in.Quit = true
+	}
+}
+
+// runPair runs both VMs from start until ms of virtual time. It must be the
+// last use of the C VM in the process, since the C state cannot be rewound.
+func runPair(t *testing.T, ms uint64) *VM {
+	t.Helper()
+	data, _ := filepath.Abs(filepath.Join("..", "..", "orig", "cd"))
+	if _, err := os.Stat(data); err != nil {
+		t.Skip("game data not present in orig/cd")
+	}
+	save := t.TempDir()
+	os.Setenv("ALIS_SAVEDIR", save)
+	if err := cref.Init(data); err != nil {
+		t.Fatal(err)
+	}
+	v, err := New(&runHost{rnd: 1, maxUs: ms * 1000}, NewFileSys(data, save))
+	if err != nil {
+		t.Fatal(err)
+	}
+	v.Run()
+	cref.Run(ms)
+	return v
+}
+
+func TestRunArenaEqual(t *testing.T) {
+	v := runPair(t, 8000)
+	t.Logf("script %s at %d µs", v.script.name, v.clk.now)
+	diffMem(t, "after 8 s", v.Mem(), cref.Mem())
+}
+
+func (v *VM) regs() cref.Regs {
+	s := v.script
+	return cref.Regs{D6: v.varD6, D7: v.varD7, D5: v.varD5, Acc: v.acc, Bsd7: v.bsd7, Bsd6: v.bsd6, Bsd7bis: v.bsd7bis,
+		Sd7: v.sd7, Sd6: v.sd6, Oldsd7: v.oldsd7, Zero: v.srZero, Neg: v.srNeg,
+		PC: s.pc, VramOrg: s.vramOrg, VaccOff: s.vaccOff, Running: s.running, Fseq: v.fseq, Saversp: v.saversp, Random: v.randomNumber}
+}
+
+func (v *VM) setRegs(r cref.Regs) {
+	v.varD6, v.varD7, v.varD5, v.acc = r.D6, r.D7, r.D5, r.Acc
+	v.bsd7, v.bsd6, v.bsd7bis, v.sd7, v.sd6, v.oldsd7 = r.Bsd7, r.Bsd6, r.Bsd7bis, r.Sd7, r.Sd6, r.Oldsd7
+	v.srZero, v.srNeg = r.Zero, r.Neg
+	v.script.pc, v.script.vaccOff, v.script.running = r.PC, r.VaccOff, r.Running
+	v.fseq, v.saversp, v.randomNumber = r.Fseq, r.Saversp, r.Random
+	v.state = stateRunning
+}
+
+// fuzzOps are the opcodes of the expression engine and control flow:
+// jumps, calls, branches, store/eval/arithmetic, loops and switches.
+var fuzzOps = []byte{
+	0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10, 0x11,
+	0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d,
+	0x1e, 0x1f, 0x20, 0x21, 0x22, 0x23, 0x2b, 0x2c, 0x2d, 0x2e, 0x2f,
+}
+
+// TestOpcodeFuzz runs the game to a live state in both VMs, then from that
+// same state executes one random instruction per case and compares the
+// arena and registers. Cases the Go VM rejects (bad sub-opcode, out of
+// range) are skipped, since C reads past its tables there.
+func TestOpcodeFuzz(t *testing.T) {
+	v := runPair(t, 8000)
+	diffMem(t, "start", v.Mem(), cref.Mem())
+	base := bytes.Clone(v.Mem())
+	regs := v.regs()
+	if c := cref.GetRegs(); c != regs {
+		t.Fatalf("registers differ at start:\ngo %+v\nc  %+v", regs, c)
+	}
+	cm := cref.Mem()
+	t.Chdir(filepath.Join("..", "..", "orig", "cd")) // alis file paths are relative
+	r := rand.New(rand.NewPCG(11, 11))
+	code := make([]byte, 48)
+	ran, skipped := 0, 0
+	for c := range 20000 {
+		copy(v.mem, base)
+		op := fuzzOps[r.IntN(len(fuzzOps))]
+		code[0] = op
+		for i := 1; i < len(code); i++ {
+			code[i] = byte(r.IntN(256))
+		}
+		copy(v.mem[regs.PC:], code)
+		rr := regs
+		rr.D6, rr.D7 = int32(r.Uint32()), int32(int16(r.Uint32()))
+		v.setRegs(rr)
+		v.err = nil
+		ok := func() (ok bool) {
+			defer func() { recover() }()
+			v.readexecOpcode()
+			return v.err == nil
+		}()
+		if !ok {
+			skipped++
+			continue
+		}
+		copy(cm, base)
+		copy(cm[regs.PC:], code)
+		cref.SetRegs(rr)
+		cref.Step()
+		ran++
+		if g, w := v.regs(), cref.GetRegs(); g != w {
+			t.Fatalf("case %d op %#02x code % x (sd7 %q):\ngo %+v\nc  %+v", c, op, code, v.cstr(rr.Sd7), g, w)
+		}
+		if !bytes.Equal(v.mem, cm) {
+			t.Logf("case %d op %#02x code % x", c, op, code)
+			diffMem(t, "after op", v.mem, cm)
+		}
+	}
+	t.Logf("%d cases ran, %d skipped", ran, skipped)
+}

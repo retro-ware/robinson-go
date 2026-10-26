@@ -66,17 +66,38 @@ func smainti(v *VM) {
 }
 
 func shimb(v *VM) {
-	ent := v.r16(v.vramAt(int32(v.read16())))
-	vram := v.r32(uint32(int32(v.atent) + int32(ent)))
+	vram := v.himEnt(v.read16(), 0x1f)
 	off := v.read16()
-	v.w8(uint32(vram+int32(off)), uint8(v.varD7))
+	if vram > 0 {
+		v.w8(uint32(vram+int32(off)), uint8(v.varD7))
+	}
 }
 
 func shimw(v *VM) {
-	ent := v.r16(v.vramAt(int32(v.read16())))
-	vram := v.r32(uint32(int32(v.atent) + int32(ent)))
+	vram := v.himEnt(v.read16(), 0x21)
 	off := v.read16()
-	v.w16(uint32(vram+int32(off)), int16(v.varD7))
+	if vram > 0 {
+		v.w16(uint32(vram+int32(off)), int16(v.varD7))
+	}
+}
+
+func shimp(v *VM) {
+	vram := v.himEnt(v.read16(), 0)
+	v.strcpy(uint32(vram+int32(v.read16())), v.oldsd7)
+}
+
+func shimtp(v *VM) { v.strcpy(uint32(v.tabstring(v.himTab())), v.oldsd7) }
+
+func shimtc(v *VM) {
+	addr := v.tabchar(v.himTab())
+	v.varD7 = v.pop()
+	v.w8(uint32(addr), uint8(v.varD7))
+}
+
+func shimti(v *VM) {
+	addr := v.tabint(v.himTab())
+	v.varD7 = v.pop()
+	v.w16(uint32(addr), int16(v.varD7))
 }
 
 func spile(v *VM) { v.push(v.varD7) }
@@ -170,26 +191,40 @@ func amainti(v *VM) {
 	v.add16(uint32(addr), int16(v.varD7))
 }
 
-func ahimb(v *VM) {}
+func ahimb(v *VM) {
+	vram := v.himEnt(v.read16(), 0x1f)
+	off := v.read16()
+	if vram > 0 {
+		v.add8(uint32(vram+int32(off)), int8(v.varD7))
+	}
+}
 
 func ahimw(v *VM) {
-	ent := v.r16(v.vramAt(int32(v.read16())))
-	addr := v.r32(uint32(int32(v.atent)+int32(ent))) + int32(v.read16())
+	vram := v.himEnt(v.read16(), 0x21)
+	off := v.read16()
+	if vram > 0 {
+		v.add16(uint32(vram+int32(off)), int16(v.varD7))
+	}
+}
+
+func ahimp(v *VM) {
+	vram := v.himEnt(v.read16(), 0)
+	v.strcat(uint32(vram+int32(v.read16())), v.oldsd7)
+}
+
+func ahimtp(v *VM) { v.strcat(uint32(v.tabstring(v.himTab())), v.oldsd7) }
+
+func ahimtc(v *VM) {
+	addr := v.tabchar(v.himTab())
+	v.varD7 = v.pop()
+	v.add8(uint32(addr), int8(v.varD7))
+}
+
+func ahimti(v *VM) {
+	addr := v.tabint(v.himTab())
+	v.varD7 = v.pop()
 	v.add16(uint32(addr), int16(v.varD7))
 }
-
-func ahimp(v *VM) {}
-
-func ahimtp(v *VM) {
-	off1 := v.read16()
-	off2 := v.read16()
-	addr := v.r32(uint32(int32(v.atent) + int32(v.r16(v.vramAt(int32(off2))))))
-	a := v.tabstring(uint32(addr + int32(off1)))
-	v.strcat(uint32(a), v.oldsd7)
-}
-
-func ahimtc(v *VM) {}
-func ahimti(v *VM) {}
 
 func aeval(v *VM) {
 	v.push(v.varD7)
@@ -202,7 +237,7 @@ func init() {
 		pnul, pnul, pnul, slocb, slocw, slocp, sloctp, sloctc, slocti,
 		sdirb, sdirw, sdirp, sdirtp, sdirtc, sdirti,
 		smainb, smainw, smainp, smaintp, smaintc, smainti,
-		shimb, shimw, pnul, pnul, pnul, pnul, spile, seval, ofin,
+		shimb, shimw, shimp, shimtp, shimtc, shimti, spile, seval, ofin,
 	} {
 		storenames[i*2] = f
 	}

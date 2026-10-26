@@ -87,33 +87,53 @@ func omaintp(v *VM) {
 func omaintc(v *VM) { v.varD7 = int32(int8(v.r8(uint32(v.tabchar(v.mainAt(v.read16())))))) }
 func omainti(v *VM) { v.varD7 = int32(v.r16(uint32(v.tabint(v.mainAt(v.read16()))))) }
 
-// entVram is the vram of the entity whose index is stored at vram+off.
-func (v *VM) himVram() uint32 {
-	entry := v.ru16(v.vramAt(int32(v.read16())))
-	return uint32(v.r32(v.atent + uint32(entry)))
+// The him* names reach another entity's variables: a word variable of this
+// script holds the entity index (an offset into the entity table), and the
+// entity's vram base is read from there (START.EXE 0x9ebf..0x9fc2).
+
+// himEnt reads the entity-variable operand and returns the entity's vram.
+// The byte and word forms check the index first: a negative one shows the
+// engine's error screen with code err.
+func (v *VM) himEnt(off int16, err int) int32 {
+	ent := int32(v.r16(v.vramAt(int32(off))))
+	if err != 0 && ent < 0 {
+		v.alisError(err)
+	}
+	return v.r32(uint32(int32(v.atent) + ent))
 }
 
-func ohimb(v *VM) {
-	vram := v.himVram()
+// himTab returns the vram of the entity for the table forms, whose operands
+// are the table offset first and the entity variable second.
+func (v *VM) himTab() uint32 {
 	off := v.read16()
-	v.varD7 = int32(int8(v.r8(uint32(int32(vram) + int32(off)))))
+	return uint32(v.himEnt(v.read16(), 0) + int32(off))
+}
+
+// The byte and word forms leave D7 alone when the entity is dead (vram <= 0).
+func ohimb(v *VM) {
+	vram := v.himEnt(v.read16(), 0x1b)
+	off := v.read16()
+	if vram > 0 {
+		v.varD7 = int32(int8(v.r8(uint32(vram + int32(off)))))
+	}
 }
 
 func ohimw(v *VM) {
-	vram := v.himVram()
+	vram := v.himEnt(v.read16(), 0x1d)
 	off := v.read16()
-	v.varD7 = int32(v.r16(uint32(int32(vram) + int32(off))))
+	if vram > 0 {
+		v.varD7 = int32(v.r16(uint32(vram + int32(off))))
+	}
 }
 
 func ohimp(v *VM) {
-	vram := v.himVram()
-	off := v.read16()
-	v.strcpy(v.sd7, uint32(int32(vram)+int32(off)))
+	vram := v.himEnt(v.read16(), 0)
+	v.strcpy(v.sd7, uint32(vram+int32(v.read16())))
 }
 
-func ohimtp(v *VM) {}
-func ohimtc(v *VM) {}
-func ohimti(v *VM) {}
+func ohimtp(v *VM) { v.strcpy(v.sd7, uint32(v.tabstring(v.himTab()))) }
+func ohimtc(v *VM) { v.varD7 = int32(int8(v.r8(uint32(v.tabchar(v.himTab()))))) }
+func ohimti(v *VM) { v.varD7 = int32(v.r16(uint32(v.tabint(v.himTab())))) }
 
 func opile(v *VM) {
 	v.varD7 = v.varD6

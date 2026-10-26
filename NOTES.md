@@ -69,6 +69,23 @@ tools/alis-ref.patch, applied to maestun/alis.
 
 Reference bugs found this way (fixed in the reference, the port follows START.EXE):
 - barland hit test: alis sign-extends the cell type byte into `ntstpix`; START.EXE zero-extends it.
+- Variable operands are signed: alis added `script_read16()` (u16) to vram_org/basemain in the
+  store/add/oper names; START.EXE uses `movsx` (e.g. tabstring 0xa199, cloop 0x3aae).
+- `cret`: alis compared the u16 `saversp` with the s16 `vacc_off`, so a top-level return never
+  stopped the script; START.EXE 0x3a53 compares signed words (`jl`).
+- him* (another entity's variables, opers 0x9ebf.., stores 0xa8cb.., adds 0xab86..): the byte and
+  word forms check the entity index (error screen 0x1b/0x1d/0x1f/0x21, "him négatif") and skip
+  dead entities (vram <= 0, D7 unchanged for reads); the operands of the table forms are
+  (offset, entity variable). alis lacked ahimb, ahimp, ahimtc, ahimti and the table reads; the
+  port lacked shimp..shimti. The reference has a v3.1 path in src/him31.h.
+
+Differential tests (`go test -tags difftest ./internal/alis`, internal/alis/cref links
+ref/alis/build/libalisref.a): arena after init and after 8 s of play, sample mixer, MV2 player,
+both unpackers (all scripts and random streams), and TestOpcodeFuzz: from the same live state,
+random instructions of the expression/flow opcodes in both VMs, comparing arena and registers.
+START.EXE's dispatch tables: opcodes 0x18432 (dword per opcode), opernames 0x1884e, storenames
+0x189a2, addnames 0x18a1a (dword per even code, `jmp [eax*2+table]`); `r2 -a x86 -b 32 -m 0
+orig/start32.bin` disassembles them.
 
 The harnesses keep files the game writes (CONFIG.INF) in `-save` / `ALIS_SAVEDIR`, so runs
 don't leak state into each other through the data directory.

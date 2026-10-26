@@ -6,7 +6,7 @@
 package cref
 
 /*
-#cgo CFLAGS: -I${SRCDIR}/../../../ref/alis/src -I${SRCDIR}/../../../ref/alis/src/audio -I${SRCDIR}/../../../ref/alis/src/render -I${SRCDIR}/../../../ref/alis/src/video -I${SRCDIR}/../../../ref/alis/src/emu2149 -I${SRCDIR}/../../../ref/alis/src/emu8950 -DALIS_CONV_INPLACE=0
+#cgo CFLAGS: -I${SRCDIR}/../../../ref/alis/src -I${SRCDIR}/../../../ref/alis/src/audio -I${SRCDIR}/../../../ref/alis/src/render -I${SRCDIR}/../../../ref/alis/src/video -I${SRCDIR}/../../../ref/alis/src/emu2149 -I${SRCDIR}/../../../ref/alis/src/emu8950 -DALIS_CONV_INPLACE=0 -DNDEBUG
 #cgo pkg-config: sdl2
 #cgo LDFLAGS: ${SRCDIR}/../../../ref/alis/build/libalisref.a -lz -lm
 #include <stdlib.h>
@@ -36,6 +36,34 @@ static int cref_unpack_script(const char *path, u8 *out, u32 magic)
 }
 void unpack_old(u8* ptr_packed, const u32 packed_sz, u8* ptr_unpacked, const u32 unpacked_sz, s8 modpack);
 u32 unpack_new(u8* ptr_packed, const u32 packed_sz, u8* ptr_unpacked, const u32 unpacked_sz, u8* dictionary);
+void harness_set_maxms(u64 ms);
+u8 sys_start(void);
+#include "script.h"
+typedef struct { s32 d6, d7; u16 d5; u32 acc, bsd7, bsd6, bsd7bis, sd7, sd6, oldsd7; u8 zero, neg; u32 pc, vram_org; s16 vacc_off; u8 running; u8 fseq; s16 saversp; u16 rnd; } cref_regs;
+#define OFF(p) ((u32)((u8 *)(p) - alis.mem))
+static void cref_get_regs(cref_regs *r)
+{
+    r->d6 = alis.varD6; r->d7 = alis.varD7; r->d5 = alis.varD5;
+    r->acc = OFF(alis.acc);
+    r->bsd7 = OFF(alis.bsd7); r->bsd6 = OFF(alis.bsd6); r->bsd7bis = OFF(alis.bsd7bis);
+    r->sd7 = OFF(alis.sd7); r->sd6 = OFF(alis.sd6); r->oldsd7 = OFF(alis.oldsd7);
+    r->zero = alis.sr.zero; r->neg = alis.sr.neg;
+    r->pc = alis.script->pc; r->vram_org = alis.script->vram_org; r->vacc_off = alis.script->vacc_off;
+    r->running = alis.script->running;
+    r->fseq = alis.fseq; r->saversp = alis.saversp; r->rnd = alis.random_number;
+}
+static void cref_set_regs(const cref_regs *r)
+{
+    alis.varD6 = r->d6; alis.varD7 = r->d7; alis.varD5 = r->d5;
+    alis.acc = (s32 *)(alis.mem + r->acc);
+    alis.bsd7 = (char *)alis.mem + r->bsd7; alis.bsd6 = (char *)alis.mem + r->bsd6; alis.bsd7bis = (char *)alis.mem + r->bsd7bis;
+    alis.sd7 = (char *)alis.mem + r->sd7; alis.sd6 = (char *)alis.mem + r->sd6; alis.oldsd7 = (char *)alis.mem + r->oldsd7;
+    alis.sr.zero = r->zero; alis.sr.neg = r->neg;
+    alis.script->pc = r->pc; alis.script->vacc_off = r->vacc_off; alis.script->running = r->running;
+    alis.fseq = r->fseq; alis.saversp = r->saversp; alis.random_number = r->rnd;
+    alis.state = eAlisStateRunning;
+}
+static void cref_step(void) { tab_opcodes[*(alis.mem + alis.script->pc++)].fptr(); }
 static u8 *cref_mem(void) { return alis.mem; }
 static u32 cref_memsize(void) { return alis.platform.ram_sz; }
 
@@ -79,6 +107,17 @@ var inited bool
 
 // Init loads the game in dataDir into the C VM (once per process). It runs
 // in virtual-time harness mode, without a window or audio device.
+var dir string
+
+// Run runs the game from its current state until virtual time ms.
+func Run(ms uint64) {
+	wd, _ := os.Getwd()
+	os.Chdir(dir)
+	defer os.Chdir(wd)
+	C.harness_set_maxms(C.u64(ms))
+	C.sys_start()
+}
+
 func Init(dataDir string) error {
 	if inited {
 		return nil
@@ -95,6 +134,7 @@ func Init(dataDir string) error {
 		return fmt.Errorf("cref: alis_init failed")
 	}
 	inited = true
+	dir = dataDir
 	return nil
 }
 
@@ -231,3 +271,41 @@ func UnpackOld(packed, out []byte, modpack int) {
 func UnpackNew(packed, out []byte, size int, dict []byte) {
 	C.unpack_new((*C.u8)(unsafe.Pointer(&packed[0])), C.u32(len(packed)), (*C.u8)(unsafe.Pointer(&out[0])), C.u32(size), (*C.u8)(unsafe.Pointer(&dict[0])))
 }
+
+// Regs are the VM registers an opcode can change, with pointers as arena
+// offsets.
+type Regs struct {
+	D6, D7                                     int32
+	D5                                         uint16
+	Acc, Bsd7, Bsd6, Bsd7bis, Sd7, Sd6, Oldsd7 uint32
+	Zero, Neg                                  bool
+	PC, VramOrg                                uint32
+	VaccOff                                    int16
+	Running                                    bool
+	Fseq                                       uint8
+	Saversp                                    int16
+	Random                                     uint16
+}
+
+func GetRegs() Regs {
+	var c C.cref_regs
+	C.cref_get_regs(&c)
+	return Regs{int32(c.d6), int32(c.d7), uint16(c.d5), uint32(c.acc), uint32(c.bsd7), uint32(c.bsd6), uint32(c.bsd7bis),
+		uint32(c.sd7), uint32(c.sd6), uint32(c.oldsd7), c.zero != 0, c.neg != 0, uint32(c.pc), uint32(c.vram_org), int16(c.vacc_off), c.running != 0, uint8(c.fseq), int16(c.saversp), uint16(c.rnd)}
+}
+
+func SetRegs(r Regs) {
+	b := func(x bool) C.u8 {
+		if x {
+			return 1
+		}
+		return 0
+	}
+	c := C.cref_regs{d6: C.s32(r.D6), d7: C.s32(r.D7), d5: C.u16(r.D5), acc: C.u32(r.Acc), bsd7: C.u32(r.Bsd7), bsd6: C.u32(r.Bsd6),
+		bsd7bis: C.u32(r.Bsd7bis), sd7: C.u32(r.Sd7), sd6: C.u32(r.Sd6), oldsd7: C.u32(r.Oldsd7), zero: b(r.Zero), neg: b(r.Neg),
+		pc: C.u32(r.PC), vram_org: C.u32(r.VramOrg), vacc_off: C.s16(r.VaccOff), running: b(r.Running), fseq: C.u8(r.Fseq), saversp: C.s16(r.Saversp), rnd: C.u16(r.Random)}
+	C.cref_set_regs(&c)
+}
+
+// Step executes one opcode of the current script.
+func Step() { C.cref_step() }

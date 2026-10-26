@@ -51,6 +51,160 @@ index 5d1d0c8..6fb3d97 100644
  
  set(CPACK_PROJECT_NAME ${PROJECT_NAME})
  set(CPACK_PROJECT_VERSION ${PROJECT_VERSION})
+diff --git a/src/addnames.c b/src/addnames.c
+index b3c0897..b1a5d61 100644
+--- a/src/addnames.c
++++ b/src/addnames.c
+@@ -21,6 +21,7 @@
+ 
+ // VM-core translation unit: opt into hot-state register pinning (see alis.h).
+ #define ALIS_VM_CORE
++#include "him31.h"
+ #include "alis.h"
+ #include "alis_private.h"
+ #include "image.h"
+@@ -61,14 +62,14 @@ static void alocp(void)
+ // Addname no. 07 opcode 0x0c aloctp
+ static void aloctp(void)
+ {
+-    s32 addr = tabstring(alis.script->vram_org + script_read16());
++    s32 addr = tabstring(alis.script->vram_org + (s16)script_read16());
+     strcat((char *)(alis.mem + addr), (char *)alis.oldsd7);
+ }
+ 
+ // Addname no. 08 opcode 0x0e aloctc
+ static void aloctc(void)
+ {
+-    s32 addr = tabchar(alis.script->vram_org + script_read16());
++    s32 addr = tabchar(alis.script->vram_org + (s16)script_read16());
+     alis.varD7 = *alis.acc++;
+     xadd8(addr, (char)alis.varD7);
+ }
+@@ -76,7 +77,7 @@ static void aloctc(void)
+ // Addname no. 09 opcode 0x10 alocti
+ static void alocti(void)
+ {
+-    s32 addr = tabint(alis.script->vram_org + script_read16());
++    s32 addr = tabint(alis.script->vram_org + (s16)script_read16());
+     alis.varD7 = *alis.acc++;
+     xadd16(addr, alis.varD7);
+ }
+@@ -205,14 +206,14 @@ static void amainp(void)
+ // Addname no. 19 opcode 0x24 amaintp
+ static void amaintp(void)
+ {
+-    s32 addr = tabstring(alis.basemain + script_read16());
++    s32 addr = tabstring(alis.basemain + (s16)script_read16());
+     strcat((char *)(alis.mem + addr), (char *)alis.oldsd7);
+ }
+ 
+ // Addname no. 20 opcode 0x26 amaintc
+ static void amaintc(void)
+ {
+-    s32 addr = tabchar(alis.basemain + script_read16());
++    s32 addr = tabchar(alis.basemain + (s16)script_read16());
+     alis.varD7 = *alis.acc++;
+     xadd8(addr, (u8)alis.varD7);
+ }
+@@ -220,7 +221,7 @@ static void amaintc(void)
+ // Addname no. 21 opcode 0x28 amainti
+ static void amainti(void)
+ {
+-    s32 addr = tabint(alis.basemain + script_read16());
++    s32 addr = tabint(alis.basemain + (s16)script_read16());
+     alis.varD7 = *alis.acc++;
+     xadd16(addr, alis.varD7);
+ }
+@@ -228,9 +229,17 @@ static void amainti(void)
+ // Addname no. 22 opcode 0x2a ahimb
+ static void ahimb(void)
+ {
++    if (HIM31)
++    {
++        s32 vram = him31_ent((s16)script_read16(), 0x1f);
++        s16 off = (s16)script_read16();
++        if (vram > 0)
++            xadd8(vram + off, (s8)alis.varD7);
++        return;
++    }
+     if (alis.platform.version == 10)
+     {
+-        s16 offset = xread16(alis.script->vram_org + script_read16());
++        s16 offset = xread16(alis.script->vram_org + (s16)script_read16());
+         s32 addr = xread32(alis.atent + offset) + script_read16();
+         xwrite8(addr, xread8(addr) + (u8)alis.varD7);
+         return;
+@@ -254,7 +263,15 @@ static void ahimb_v6(void)
+ // Addname no. 23 opcode 0x2c ahimw
+ static void ahimw(void)
+ {
+-    s16 offset = xread16(alis.script->vram_org + script_read16());
++    if (HIM31)
++    {
++        s32 vram = him31_ent((s16)script_read16(), 0x21);
++        s16 off = (s16)script_read16();
++        if (vram > 0)
++            xadd16(vram + off, (s16)alis.varD7);
++        return;
++    }
++    s16 offset = xread16(alis.script->vram_org + (s16)script_read16());
+     s32 offset2 = xread32(alis.atent + offset) + script_read16();
+     xadd16(offset2, alis.varD7);
+ }
+@@ -262,6 +279,13 @@ static void ahimw(void)
+ // Addname no. 24 opcode 0x2e ahimp
+ static void ahimp(void)
+ {
++    if (HIM31)
++    {
++        s32 vram = him31_ent((s16)script_read16(), 0);
++        s16 off = (s16)script_read16();
++        strcat((char *)(alis.mem + vram + off), alis.oldsd7);
++        return;
++    }
+     ALIS_DEBUG(EDebugInfo, "MISSING: ", __FUNCTION__);
+ }
+ 
+@@ -277,6 +301,11 @@ static void ahimp_v6(void)
+ // Addname no. 25 opcode 0x30 ahimtp
+ static void ahimtp(void)
+ {
++    if (HIM31)
++    {
++        strcat((char *)(alis.mem + tabstring(him31_tab())), alis.oldsd7);
++        return;
++    }
+     s16 offset1 = script_read16();
+     s16 offset2 = script_read16();
+     s32 addr = xread32(alis.atent + xread16(alis.script->vram_org + offset2));
+@@ -287,6 +316,13 @@ static void ahimtp(void)
+ // Addname no. 26 opcode 0x32 ahimtc
+ static void ahimtc(void)
+ {
++    if (HIM31)
++    {
++        s32 addr = tabchar(him31_tab());
++        alis.varD7 = *alis.acc++;
++        xadd8(addr, (s8)alis.varD7);
++        return;
++    }
+     ALIS_DEBUG(EDebugInfo, "MISSING: ", __FUNCTION__);
+ }
+ 
+@@ -304,6 +340,13 @@ static void ahimtc_v6(void)
+ // Addname no. 27 opcode 0x34 ahimti
+ static void ahimti(void)
+ {
++    if (HIM31)
++    {
++        s32 addr = tabint(him31_tab());
++        alis.varD7 = *alis.acc++;
++        xadd16(addr, (s16)alis.varD7);
++        return;
++    }
+     ALIS_DEBUG(EDebugInfo, "MISSING: ", __FUNCTION__);
+ }
+ 
 diff --git a/src/alis.c b/src/alis.c
 index b8719c7..e0496f2 100644
 --- a/src/alis.c
@@ -120,6 +274,42 @@ index 450a2e1..f0b8194 100644
  
  // ALIS_PLANAR_CONV: 4-plane sprite storage conversion without the native render. Always on for
  // ALIS_NATIVE_PLANAR; define alone on desktop to debug the conversion (sprites render garbled).
+diff --git a/src/him31.h b/src/him31.h
+new file mode 100644
+index 0000000..cbf2f62
+--- /dev/null
++++ b/src/him31.h
+@@ -0,0 +1,30 @@
++// START.EXE (ALIS 3.1, Robinson's Requiem PC) him* handlers: another entity's
++// variables. The byte and word forms check the entity index (error screen
++// 0x1b..0x21) and skip dead entities (vram <= 0); 0x9ebf..0xac9b.
++#pragma once
++#include "alis.h"
++#include "alis_private.h"
++#include "mem.h"
++#include <stdio.h>
++#include <string.h>
++
++#define HIM31 (alis.platform.version == 31)
++
++static inline s32 him31_ent(s16 off, int err)
++{
++    s32 ent = (s16)xread16(alis.script->vram_org + off);
++    if (err && ent < 0)
++    {
++        fprintf(stderr, "%s: Error %d: him negatif\n", alis.script->name, err);
++        alis.state = eAlisStateStopped;
++        alis.script->running = 0;
++    }
++    return (s32)xread32(alis.atent + ent);
++}
++
++static inline u32 him31_tab(void)
++{
++    s16 off = (s16)script_read16();
++    s16 var = (s16)script_read16();
++    return (u32)(him31_ent(var, 0) + off);
++}
 diff --git a/src/image.c b/src/image.c
 index 26375e3..bb0ce5c 100644
 --- a/src/image.c
@@ -199,7 +389,7 @@ index d31d91a..7cb7f50 100644
              printf("\n");
              ALIS_DEBUG(EDebugSystem, "The ALIS VM has been stopped.\n");
 diff --git a/src/opcodes.c b/src/opcodes.c
-index 1151bed..af2d0ad 100644
+index 1151bed..46c6539 100644
 --- a/src/opcodes.c
 +++ b/src/opcodes.c
 @@ -9296,6 +9296,7 @@ static void ctexmap(void)
@@ -218,6 +408,167 @@ index 1151bed..af2d0ad 100644
      
      alis.varD7 = image.cxtstpix;
      cstore_continue();
+@@ -11410,7 +11412,7 @@ static void cclock(void)
+ // Codopname no. 018 opcode 0x11 cret
+ static void cret(void)
+ {
+-    if (alis.fseq == 0 && alis.saversp <= alis.script->vacc_off)
++    if (alis.fseq == 0 && (s16)alis.saversp <= alis.script->vacc_off)
+     {
+         cstop();
+     }
+diff --git a/src/opernames.c b/src/opernames.c
+index d3b0040..06c6633 100644
+--- a/src/opernames.c
++++ b/src/opernames.c
+@@ -21,6 +21,7 @@
+ 
+ // VM-core translation unit: opt into hot-state register pinning (see alis.h).
+ #define ALIS_VM_CORE
++#include "him31.h"
+ #include "alis.h"
+ #include "alis_private.h"
+ #include "image.h"
+@@ -199,7 +200,7 @@ void oloctp(void)
+     if (alis.platform.version == 10)
+         return;
+     
+-    s32 addr = tabstring(alis.script->vram_org + script_read16());
++    s32 addr = tabstring(alis.script->vram_org + (s16)script_read16());
+     ALIS_DEBUG(EDebugVerbose, " [\"%s\" <= %.6x]", (char *)(alis.mem + addr), addr);
+     strcpy(alis.sd7, (char *)(alis.mem + addr));
+ }
+@@ -207,7 +208,7 @@ void oloctp(void)
+ // Opername opcode 0x3e olocto
+ void olocto(void)
+ {
+-    s32 cell = tabstring(alis.script->vram_org + script_read16());
++    s32 cell = tabstring(alis.script->vram_org + (s16)script_read16());
+     alis.varD7 = cell;
+     alis.v6tabcell = (u32)cell;
+ }
+@@ -312,14 +313,14 @@ void ogettext(void)
+ // Opername no. 08 opcode 0x0e oloctc
+ void oloctc(void)
+ {
+-    s32 addr = tabchar(alis.script->vram_org + script_read16());
++    s32 addr = tabchar(alis.script->vram_org + (s16)script_read16());
+     alis.varD7 = (s8)xread8(addr);
+ }
+ 
+ // Opername no. 09 opcode 0x10 olocti
+ void olocti(void)
+ {
+-    s32 addr = tabint(alis.script->vram_org + script_read16());
++    s32 addr = tabint(alis.script->vram_org + (s16)script_read16());
+     alis.varD7 = xread16(addr);
+ }
+ 
+@@ -470,7 +471,7 @@ void omaintp(void)
+     if (alis.platform.version == 10)
+         return;
+     
+-    s32 addr = tabstring(alis.basemain + script_read16());
++    s32 addr = tabstring(alis.basemain + (s16)script_read16());
+     ALIS_DEBUG(EDebugVerbose, " [\"%s\" <= %.6x]", (char *)(alis.mem + addr), addr);
+     strcpy(alis.sd7, (char *)(alis.mem + addr));
+ }
+@@ -478,20 +479,28 @@ void omaintp(void)
+ // Opername no. 20 opcode 0x26 omaintc
+ void omaintc(void)
+ {
+-    s32 addr = tabchar(alis.basemain + script_read16());
++    s32 addr = tabchar(alis.basemain + (s16)script_read16());
+     alis.varD7 = (s8)xread8(addr);
+ }
+ 
+ // Opername no. 21 opcode 0x28 omainti
+ void omainti(void)
+ {
+-    s32 addr = tabint(alis.basemain + script_read16());
++    s32 addr = tabint(alis.basemain + (s16)script_read16());
+     alis.varD7 = xread16(addr);
+ }
+ 
+ // Opername no. 22 opcode 0x2a ohimb
+ void ohimb(void)
+ {
++    if (HIM31)
++    {
++        s32 vram = him31_ent((s16)script_read16(), 0x1b);
++        s16 off = (s16)script_read16();
++        if (vram > 0)
++            alis.varD7 = (s8)xread8(vram + off);
++        return;
++    }
+     u16 entry = xread16(alis.script->vram_org + (s16)script_read16());
+     u32 vram_addr = xread32(alis.atent + entry);
+ 
+@@ -511,6 +520,14 @@ void ohimb(void)
+ // Opername no. 23 opcode 0x2c ohimw
+ void ohimw(void)
+ {
++    if (HIM31)
++    {
++        s32 vram = him31_ent((s16)script_read16(), 0x1d);
++        s16 off = (s16)script_read16();
++        if (vram > 0)
++            alis.varD7 = (s16)xread16(vram + off);
++        return;
++    }
+     u16 entry = xread16(alis.script->vram_org + (s16)script_read16());
+     u32 vram_addr = xread32(alis.atent + entry);
+ 
+@@ -531,6 +548,13 @@ void ohimw(void)
+ // Opername no. 24 opcode 0x2e ohimp
+ void ohimp(void)
+ {
++    if (HIM31)
++    {
++        s32 vram = him31_ent((s16)script_read16(), 0);
++        s16 off = (s16)script_read16();
++        strcpy(alis.sd7, (char *)(alis.mem + vram + off));
++        return;
++    }
+     u16 entry = xread16(alis.script->vram_org + (s16)script_read16());
+     u32 vram_addr = xread32(alis.atent + entry);
+ 
+@@ -548,6 +572,11 @@ void ohimp(void)
+ // Opername no. 25 opcode 0x30 ohimtp
+ void ohimtp(void)
+ {
++    if (HIM31)
++    {
++        strcpy(alis.sd7, (char *)(alis.mem + tabstring(him31_tab())));
++        return;
++    }
+     ALIS_DEBUG(EDebugWarning, "MISSING: %s", __FUNCTION__);
+ }
+ 
+@@ -565,6 +594,11 @@ static void ohimtp_v6(void)
+ // Opername no. 26 opcode 0x32 ohimtc
+ void ohimtc(void)
+ {
++    if (HIM31)
++    {
++        alis.varD7 = (s8)xread8(tabchar(him31_tab()));
++        return;
++    }
+     if (alis.platform.version == 10)
+     {
+         s16 offset = script_read16();
+@@ -590,6 +624,11 @@ static void ohimtc_v6(void)
+ // Opername no. 27 opcode 0x34 ohimti
+ void ohimti(void)
+ {
++    if (HIM31)
++    {
++        alis.varD7 = (s16)xread16(tabint(him31_tab()));
++        return;
++    }
+     if (alis.platform.version == 10)
+     {
+         s16 offset = script_read16();
 diff --git a/src/render/rrq3d.c b/src/render/rrq3d.c
 index 6480091..118fcae 100644
 --- a/src/render/rrq3d.c
@@ -286,6 +637,156 @@ index 61f1a35..2888761 100644
 +    if (getenv("LANDDBG")) fprintf(stderr, "LD %s %x %x\n", name, script->data_org - alis.basemain, data_sz);
      // get insert point
      insert = search_insert(alis.nbprog, script->header.id);
+ 
+diff --git a/src/storenames.c b/src/storenames.c
+index 511bf51..2c43287 100644
+--- a/src/storenames.c
++++ b/src/storenames.c
+@@ -21,6 +21,7 @@
+ 
+ // VM-core translation unit: opt into hot-state register pinning (see alis.h).
+ #define ALIS_VM_CORE
++#include "him31.h"
+ #include "alis.h"
+ #include "alis_private.h"
+ #include "image.h"
+@@ -74,7 +75,7 @@ static void slocp(void)
+ // Store at LOCation with offseT: Pointer
+ static void sloctp(void)
+ {
+-    s32 addr = tabstring(alis.script->vram_org + script_read16());
++    s32 addr = tabstring(alis.script->vram_org + (s16)script_read16());
+     ALIS_DEBUG(EDebugVerbose, " [\"%s\" <= %.6x]", (char *)alis.oldsd7, (u8 *)alis.oldsd7 - alis.mem);
+     strcpy((char *)(alis.mem + addr), (char *)alis.oldsd7);
+ }
+@@ -83,7 +84,7 @@ static void sloctp(void)
+ // Store at LOCation with offseT: Char
+ static void sloctc(void)
+ {
+-    s32 addr = tabchar(alis.script->vram_org + script_read16());
++    s32 addr = tabchar(alis.script->vram_org + (s16)script_read16());
+     alis.varD7 = *alis.acc++;
+     xwrite8(addr, alis.varD7);
+ }
+@@ -93,7 +94,7 @@ static void sloctc(void)
+ static void slocti(void)
+ {
+ 
+-    u32 addr = tabint(alis.script->vram_org + script_read16());
++    u32 addr = tabint(alis.script->vram_org + (s16)script_read16());
+     alis.varD7 = *alis.acc++;
+     xwrite16(addr, alis.varD7);
+ }
+@@ -234,7 +235,7 @@ static void smainp(void)
+ // Storename no. 19 opcode 0x24 smaintp
+ static void smaintp(void)
+ {
+-    s32 addr = tabstring(alis.basemain + script_read16());
++    s32 addr = tabstring(alis.basemain + (s16)script_read16());
+     ALIS_DEBUG(EDebugVerbose, " [\"%s\" <= %.6x]", (char *)(alis.mem + addr), addr);
+     strcpy((char *)(alis.mem + addr), (char *)alis.oldsd7);
+ }
+@@ -242,7 +243,7 @@ static void smaintp(void)
+ // Storename no. 20 opcode 0x26 smaintc
+ static void smaintc(void)
+ {
+-    s32 addr = tabchar(alis.basemain + script_read16());
++    s32 addr = tabchar(alis.basemain + (s16)script_read16());
+     alis.varD7 = *alis.acc++;
+     xwrite8(addr, alis.varD7);
+ }
+@@ -250,7 +251,7 @@ static void smaintc(void)
+ // Storename no. 21 opcode 0x28 smainti
+ static void smainti(void)
+ {
+-    u32 addr = tabint(alis.basemain + script_read16());
++    u32 addr = tabint(alis.basemain + (s16)script_read16());
+     alis.varD7 = *alis.acc++;
+     xwrite16(addr, alis.varD7);
+ }
+@@ -258,6 +259,14 @@ static void smainti(void)
+ // Storename no. 22 opcode 0x2a shimb
+ static void shimb(void)
+ {
++    if (HIM31)
++    {
++        s32 vram = him31_ent((s16)script_read16(), 0x1f);
++        s16 off = (s16)script_read16();
++        if (vram > 0)
++            xwrite8(vram + off, (u8)alis.varD7);
++        return;
++    }
+     s16 offset = script_read16();
+     s16 ent = xread16(alis.script->vram_org + offset);
+ 
+@@ -274,6 +283,14 @@ static void shimb(void)
+ // Storename no. 23 opcode 0x2c shimw
+ static void shimw(void)
+ {
++    if (HIM31)
++    {
++        s32 vram = him31_ent((s16)script_read16(), 0x21);
++        s16 off = (s16)script_read16();
++        if (vram > 0)
++            xwrite16(vram + off, (s16)alis.varD7);
++        return;
++    }
+     s16 offset = script_read16();
+     s16 ent = xread16(alis.script->vram_org + offset);
+ 
+@@ -290,6 +307,13 @@ static void shimw(void)
+ // Storename no. 24 opcode 0x2e shimp
+ static void shimp(void)
+ {
++    if (HIM31)
++    {
++        s32 vram = him31_ent((s16)script_read16(), 0);
++        s16 off = (s16)script_read16();
++        strcpy((char *)(alis.mem + vram + off), alis.oldsd7);
++        return;
++    }
+     ALIS_DEBUG(EDebugWarning, "MISSING: %s", __FUNCTION__);
+ }
+ 
+@@ -306,6 +330,11 @@ static void shimp_v6(void)
+ // Storename no. 25 opcode 0x30 shimtp
+ static void shimtp(void)
+ {
++    if (HIM31)
++    {
++        strcpy((char *)(alis.mem + tabstring(him31_tab())), alis.oldsd7);
++        return;
++    }
+     ALIS_DEBUG(EDebugWarning, "MISSING: %s", __FUNCTION__);
+ }
+ 
+@@ -323,6 +352,13 @@ static void shimtp_v6(void)
+ // Storename no. 26 opcode 0x32 shimtc
+ static void shimtc(void)
+ {
++    if (HIM31)
++    {
++        s32 addr = tabchar(him31_tab());
++        alis.varD7 = *alis.acc++;
++        xwrite8(addr, (u8)alis.varD7);
++        return;
++    }
+     ALIS_DEBUG(EDebugWarning, "MISSING: %s", __FUNCTION__);
+ }
+ 
+@@ -340,6 +376,13 @@ static void shimtc_v6(void)
+ // Storename no. 27 opcode 0x34 shimti
+ static void shimti(void)
+ {
++    if (HIM31)
++    {
++        s32 addr = tabint(him31_tab());
++        alis.varD7 = *alis.acc++;
++        xwrite16(addr, (s16)alis.varD7);
++        return;
++    }
+     ALIS_DEBUG(EDebugWarning, "MISSING: %s", __FUNCTION__);
+ }
  
 diff --git a/src/sys/sys.c b/src/sys/sys.c
 index 89651c2..d07e87f 100644
