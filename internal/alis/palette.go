@@ -5,28 +5,17 @@ import (
 	"os"
 )
 
-var accDebug = os.Getenv("ACCDBG") != ""
 var palDebug = os.Getenv("PALDBG") != ""
 
 // DOS palette model of the 32-bit driver (alis image.c dpal_*, family
 // DPAL_B32): a 6-bit target (tpal) and a live palette (mpal); fades chase
 // mpal toward tpal on the vblank tick.
 
-const (
-	// timeclockHz is the timer rate the pacing assumes. The ISR runs every
-	// 17 ms, but alis computes the rate before it knows the platform is
-	// little-endian and so assumes 50 Hz.
-	// TODO(START.EXE): check the original's fade and film rates.
-	timeclockHz = 50
-	paceHz      = 50 // frames and fades run at the ST's 50 Hz
-)
-
 type dosPal struct {
 	tpal, mpal, sav1, sav2 [768]uint8
 	step, reload, skip     uint8
 	counter                int8
 	ftopal, lock           uint8
-	acc                    uint32
 }
 
 func dpalExpand(c uint8) uint8 { c &= 0x3f; return c<<2 | c>>4 }
@@ -40,6 +29,8 @@ func (v *VM) dpalUpload() {
 	}
 }
 
+// dpalChase steps the live palette toward the target (START.EXE 0x13989;
+// the compares are signed bytes).
 func (v *VM) dpalChase() {
 	d := &v.img.dpal
 	d.ftopal = 0
@@ -49,15 +40,15 @@ func (v *VM) dpalChase() {
 			continue
 		}
 		d.ftopal = 1
-		if t > m {
-			if int(m)+int(d.step) < int(t) {
-				d.mpal[i] = m + d.step
+		if int8(t) < int8(m) {
+			if n := m - d.step; int8(n) > int8(t) {
+				d.mpal[i] = n
 			} else {
 				d.mpal[i] = t
 			}
 		} else {
-			if int(m)-int(d.step) > int(t) {
-				d.mpal[i] = m - d.step
+			if n := m + d.step; int8(n) < int8(t) {
+				d.mpal[i] = n
 			} else {
 				d.mpal[i] = t
 			}
@@ -286,10 +277,11 @@ func (v *VM) dosFilmPalette(addr []byte) {
 	v.dpalUpload()
 }
 
+// dpalTick is START.EXE 0x1394a.
 func (v *VM) dpalTick() {
 	d := &v.img.dpal
 	if palDebug {
-		fmt.Fprintf(os.Stderr, "P %d %d %d %d %d\n", v.clk.now/1000, d.counter, d.reload, d.ftopal, d.step)
+		fmt.Fprintf(os.Stderr, "P %d %d %d %d %d\n", v.Now()/1000, d.counter, d.reload, d.ftopal, d.step)
 	}
 	if d.lock != 0 {
 		return
@@ -307,15 +299,9 @@ func (v *VM) dpalTick() {
 	v.dpalChase()
 }
 
-// dosPalTick runs from itroutine; fade steps follow the 50 Hz pace.
+// dosPalTick runs from itroutine on every tick (START.EXE 0x1fc6).
 func (v *VM) dosPalTick() {
-	d := &v.img.dpal
-	if accDebug {
-		fmt.Fprintf(os.Stderr, "A %d %d %d\n", v.clk.now/1000, d.acc, d.ftopal)
-	}
-	for d.acc += paceHz; d.acc >= timeclockHz; d.acc -= timeclockHz {
-		if d.ftopal != 0 {
-			v.dpalTick()
-		}
+	if v.img.dpal.ftopal != 0 {
+		v.dpalTick()
 	}
 }

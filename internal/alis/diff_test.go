@@ -397,7 +397,7 @@ func runPair(t *testing.T, ms uint64) *VM {
 
 func TestRunArenaEqual(t *testing.T) {
 	v := runPair(t, 8000)
-	t.Logf("script %s at %d µs", v.script.name, v.clk.now)
+	t.Logf("script %s at %d µs", v.script.name, v.Now())
 	diffMem(t, "after 8 s", v.Mem(), cref.Mem())
 }
 

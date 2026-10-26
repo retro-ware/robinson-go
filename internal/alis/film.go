@@ -28,8 +28,8 @@ type film struct {
 	active             bool // eAlisVideoFLIC
 	endframe           int
 
-	vga                   []byte
-	paceAnchor, paceTotal uint64
+	vga      []byte
+	deadline uint32 // timeclock of the next frame
 }
 
 func le16b(b []byte) uint16 { return uint16(b[0]) | uint16(b[1])<<8 }
@@ -77,6 +77,7 @@ func (v *VM) inifilm() {
 	v.fliReset()
 	f.active = true
 	v.flitofen()
+	f.deadline = v.timeclock
 }
 
 func (v *VM) runfilm() {
@@ -93,41 +94,18 @@ func (v *VM) runfilm() {
 	img.wlogx1, img.wlogy1 = 0, 0
 	img.clipx1, img.clipy1 = img.fenx1, img.feny1
 	img.clipx2, img.clipy2 = img.fenx2, img.feny2
-	f.paceAnchor, f.paceTotal = 0, 0
 	f.playing = true
 	for {
-		prevclock := v.timeclock
-		q := &v.aud.fliq
-		head := q.head
-		result := v.flitofen()
-		enq := (q.head - head) & (fliQueueSize - 1)
-		if fliDebug {
-			fmt.Fprintf(os.Stderr, "F %d %d enq=%d qh=%d qt=%d tc=%d\n", v.clk.now/1000, f.frame, enq, q.head, q.tail, v.timeclock)
-		}
+		// wait for the frame's tick (START.EXE 0x13e4b)
 		if f.waitclock > 0 {
-			if enq != 0 {
-				if f.paceAnchor == 0 {
-					f.paceAnchor = v.clk.now / 1000
-					f.paceTotal = 0
-				}
-				for k := range enq {
-					c := q.chunks[(head+k)&(fliQueueSize-1)]
-					if c.freq > 0 {
-						f.paceTotal += uint64(len(c.data)) * 1000 / uint64(c.freq)
-					}
-				}
-				for v.clk.now/1000-f.paceAnchor < f.paceTotal {
-					v.sleep(1000)
-				}
-			} else {
-				idx := int16(uint32(uint16(f.waitclock)) * timeclockHz / 60)
-				if idx == 0 {
-					idx = 1
-				}
-				for v.timeclock < uint32(idx)+prevclock {
-					v.sleep(1000)
-				}
+			for f.deadline > v.timeclock && v.state != stateStopped {
+				v.waitTick()
 			}
+		}
+		f.deadline = v.timeclock + uint32(uint16(f.waitclock))
+		result := v.flitofen()
+		if fliDebug {
+			fmt.Fprintf(os.Stderr, "F %d %d tc=%d\n", v.Now()/1000, f.frame, v.timeclock)
 		}
 		if !result {
 			break

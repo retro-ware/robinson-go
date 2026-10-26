@@ -90,6 +90,8 @@ type specs struct {
 type VM struct {
 	// ShowCursor draws the game's mouse cursor into the frames (native host).
 	ShowCursor bool
+	// OnDraw, if set, runs at each draw before the frame wait.
+	OnDraw func()
 
 	host Host
 	fs   *FileSys

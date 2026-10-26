@@ -79,7 +79,7 @@ func (v *VM) init() {
 	v.aud.musicID = 0xffff
 	v.restartLoop = false
 	v.automode = 0
-	v.theconfig = 0x87 // sound + video + high memory
+	v.theconfig = 0x44 // mouse driver, fast CD (START.EXE 0x2753, 0x330b)
 
 	v.img = image{}
 	v.dosPalReset()
@@ -503,7 +503,7 @@ func (v *VM) Run() (err error) {
 	v.state = stateRunning
 	v.cstopret = 0
 	v.varD5 = 0
-	v.initTimers()
+	v.startupTicks()
 
 	for v.state != stateStopped {
 		v.restartLoop = false
@@ -530,7 +530,7 @@ func (v *VM) Run() (err error) {
 			if int8(cs) < 0 {
 				v.w8(vram-4, 1)
 			}
-			if v.ru32(vram-0x3e) <= v.timeclock {
+			if int32(v.timeclock) >= v.r32(vram-0x3e) { // signed, as START.EXE 0x387b
 				v.wu32(vram-0x3e, uint32(v.ru16(vram-0x3a))+v.timeclock)
 				v.savecoord(vram)
 				v.script.pc = uint32(v.r32(vram - 0x08))

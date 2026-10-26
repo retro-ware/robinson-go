@@ -215,6 +215,7 @@ func main() {
 	input := flag.String("input", "", "input script (C harness ALIS_INPUT format)")
 	wav := flag.String("wav", "", "write the mixed audio as WAV (C harness ALIS_WAV)")
 	save := flag.String("save", "", "directory for files the game writes (C harness ALIS_SAVEDIR; default: the data directory)")
+	frames := flag.String("frames", "", "log tick, screen and palette CRC at every draw (as origrun -frames)")
 	flag.Parse()
 
 	h := &host{maxUs: *maxMs * 1000, lastCRC: 0xffffffff, rnd: 1, dumpDir: *dump}
@@ -268,6 +269,21 @@ func main() {
 		log.Fatal(err)
 	}
 	h.vm = vm
+	if *frames != "" {
+		f, err := os.Create(*frames)
+		if err != nil {
+			log.Fatal(err)
+		}
+		w := bufio.NewWriter(f)
+		defer f.Close()
+		defer w.Flush()
+		n := 0
+		vm.OnDraw = func() {
+			fmt.Fprintf(w, "draw %d tick %d ct %d scr %08x pal %08x\n", n, vm.Timeclock(), vm.Ctiming(),
+				crc32.ChecksumIEEE(vm.Screen()), crc32.ChecksumIEEE(vm.DAC()))
+			n++
+		}
+	}
 	if err := vm.Run(); err != nil {
 		log.Print(err)
 	}

@@ -309,6 +309,29 @@ func (m *Machine) Prog() []byte { return m.prog }
 // VRAM is the VGA mode 13h framebuffer.
 func (m *Machine) VRAM() []byte { return m.low[vgaLin : vgaLin+64000] }
 
+// Screen is the VGA screen without the mouse cursor: the background the
+// timer handler saved (at 0x16070: offset, width, height, pixels) is put
+// back while the cursor is on.
+func (m *Machine) Screen() []byte {
+	scr := append([]byte(nil), m.VRAM()...)
+	if int8(m.D8(0x16077)) < 0 {
+		return scr
+	}
+	sv := m.D32(0x16070)
+	off := m.D32(sv)
+	w, h := uint32(m.D16(sv+4)), uint32(m.D16(sv+6))
+	src := sv + 8
+	for y := uint32(0); y < h; y++ {
+		for x := uint32(0); x < w; x++ {
+			if p := off + y*320 + x; p < 64000 {
+				scr[p] = m.D8(src)
+			}
+			src++
+		}
+	}
+	return scr
+}
+
 // DAC is the VGA palette (256 × r, g, b, 6 bit).
 func (m *Machine) DAC() []byte { return m.vga.dac[:] }
 

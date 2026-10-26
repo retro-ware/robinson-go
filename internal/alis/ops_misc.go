@@ -44,7 +44,6 @@ func cfindcla(v *VM) {
 	crstent(v)
 }
 
-
 func (v *VM) instru() {
 	v.readexecOpername()
 	tabidx := int16(v.varD7)

@@ -5,8 +5,10 @@
 package main
 
 import (
+	"bufio"
 	"flag"
 	"fmt"
+	"hash/crc32"
 	"image"
 	"image/color"
 	"image/png"
@@ -23,6 +25,7 @@ func main() {
 	setup := flag.String("stp", "RBVVSBP1J0M1KQ", "START.STP contents for a new drive C:")
 	pngDir := flag.String("png", "", "write the screen at every -every'th draw to this directory")
 	every := flag.Int("every", 50, "draws between -png frames")
+	frames := flag.String("frames", "", "log tick, screen and palette CRC at every draw (as rrqharness -frames)")
 	flag.Parse()
 
 	if *save == "" {
@@ -42,14 +45,28 @@ func main() {
 	check(err)
 	defer m.Close()
 	draws := 0
+	var fw *bufio.Writer
+	if *frames != "" {
+		f, err := os.Create(*frames)
+		check(err)
+		defer f.Close()
+		fw = bufio.NewWriter(f)
+		defer fw.Flush()
+	}
 	m.OnDraw = func() {
+		scr := m.Screen()
 		if *pngDir != "" && draws%*every == 0 {
-			check(writePNG(filepath.Join(*pngDir, fmt.Sprintf("d%05d_t%07.0f.png", draws, m.Ms())), m.VRAM(), m.DAC()))
+			check(writePNG(filepath.Join(*pngDir, fmt.Sprintf("d%05d_t%07.0f.png", draws, m.Ms())), scr, m.DAC()))
+		}
+		if fw != nil {
+			fmt.Fprintf(fw, "draw %d tick %d ct %d scr %08x pal %08x\n", draws, m.D32(0x16058), m.D8(0x1605e),
+				crc32.ChecksumIEEE(scr), crc32.ChecksumIEEE(m.DAC()))
 		}
 		draws++
 	}
 	err = m.Run(uint64(*ms * 1193182 / 1000))
-	fmt.Fprintf(os.Stderr, "stopped: err=%v draws=%d unknown ports=%#x\n", err, draws, m.UnknownPorts())
+	fmt.Fprintf(os.Stderr, "stopped: err=%v draws=%d config=%#x cdspeed=%d unknown ports=%#x\n",
+		err, draws, m.D16(0x16062), m.D32(0x18abc), m.UnknownPorts())
 }
 
 func writePNG(name string, vram, dac []byte) error {
