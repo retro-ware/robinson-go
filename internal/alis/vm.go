@@ -88,6 +88,9 @@ type specs struct {
 // VM is the whole machine state (alis sAlisVM plus the image, audio and
 // screen globals).
 type VM struct {
+	// ShowCursor draws the game's mouse cursor into the frames (native host).
+	ShowCursor bool
+
 	host Host
 	fs   *FileSys
 	in   Input

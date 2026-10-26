@@ -116,6 +116,57 @@ func (v *VM) compose(out []uint32) {
 	for i, c := range v.img.physic {
 		out[i] = v.img.mpalet[c]
 	}
+	if v.ShowCursor {
+		v.drawCursor(out)
+	}
+}
+
+// drawCursor overlays the cdefmouse sprite at the mouse position, on the
+// output only (the DOS game draws it over the screen; the harnesses leave
+// it out). Types 0x00 (4-bit, colour 0 clear), 0x10 (4-bit with palette
+// base and clear colour) and 0x14 (8-bit, colour 0 clear).
+func (v *VM) drawCursor(out []uint32) {
+	m := v.in.Mouse
+	d := v.desmouse
+	if !m.Enabled || d == 0 {
+		return
+	}
+	typ := v.mem[d]
+	w := int(v.ru16(d+2)) + 1
+	h := int(v.ru16(d+4)) + 1
+	for y := range h {
+		for x := range w {
+			var c uint8
+			var clear bool
+			switch typ {
+			case 0x00:
+				b := v.mem[d+6+uint32(y*(w/2)+x/2)]
+				c = b >> 4
+				if x%2 == 1 {
+					c = b & 0xf
+				}
+				clear = c == 0
+			case 0x10:
+				b := v.mem[d+8+uint32(y*(w/2)+x/2)]
+				c = b >> 4
+				if x%2 == 1 {
+					c = b & 0xf
+				}
+				clear = c == v.mem[d+7]
+				c += v.mem[d+6]
+			case 0x14:
+				c = v.mem[d+8+uint32(y*w+x)]
+				clear = c == 0
+			default:
+				return
+			}
+			px, py := m.X+x, m.Y+y
+			if clear || px >= gameWidth || py >= gameHeight {
+				continue
+			}
+			out[py*gameWidth+px] = v.img.mpalet[c]
+		}
+	}
 }
 
 func (v *VM) setphysic() {

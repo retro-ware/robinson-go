@@ -118,6 +118,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	vm.ShowCursor = true
 
 	if err := glfw.Init(); err != nil {
 		log.Fatal(err)
