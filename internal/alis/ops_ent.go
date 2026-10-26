@@ -307,22 +307,23 @@ func cpredent(v *VM) {
 	v.cstoreContinue()
 }
 
-// calcnear is false when target is within valnorme (and the view cone).
-func (v *VM) calcnear(source, target uint32, val *int32) bool {
-	wcx := int32(v.r16(target+scrWCX)) - int32(v.r16(source+scrWCX))
-	wcy := int32(v.r16(target+scrWCY)) - int32(v.r16(source+scrWCY))
-	wcz := int32(v.r16(target+scrWCZ)) - int32(v.r16(source+scrWCZ))
-	*val = wcx*wcx + wcy*wcy + wcz*wcz
-	if uint32(*val) <= v.valnorme {
-		if v.fview == 0 {
-			return false
-		}
-		dot := int32(int8(v.r8(source+scrWCX2)))*wcx + int32(int8(v.r8(source+scrWCY2)))*wcy + int32(int8(v.r8(source+scrWCZ2)))*wcz
-		if *val <= dot*int32(v.valchamp) {
-			return false
-		}
+// calcnear is START.EXE 0x82bf: the squared distance to the target and
+// whether it lies within the norm (and, for the view searches, the cone).
+// The differences are 16-bit, the sums and compares signed 32-bit.
+func (v *VM) calcnear(src, tgt uint32) (int32, bool) {
+	dx := v.r16(tgt+scrWCX) - v.r16(src+scrWCX)
+	dy := v.r16(tgt+scrWCY) - v.r16(src+scrWCY)
+	dz := v.r16(tgt+scrWCZ) - v.r16(src+scrWCZ)
+	dist := int32(dx)*int32(dx) + int32(dy)*int32(dy) + int32(dz)*int32(dz)
+	if dist > int32(v.valnorme) {
+		return dist, false
 	}
-	return true
+	if v.fview == 0 {
+		return dist, true
+	}
+	dot := int32(int8(v.mem[src+scrWCX2]))*int32(dx) + int32(int8(v.mem[src+scrWCY2]))*int32(dy) +
+		int32(int8(v.mem[src+scrWCZ2]))*int32(dz)
+	return dist, dist <= int32(uint32(dot)*uint32(uint16(v.valchamp)))
 }
 
 func (v *VM) buf32(i int) int32 { return int32(binary.LittleEndian.Uint32(v.buffer[i*4:])) }
@@ -330,13 +331,13 @@ func (v *VM) setBuf32(i int, x int32) {
 	binary.LittleEndian.PutUint32(v.buffer[i*4:], uint32(x))
 }
 
-// trinorme sorts the n found entities by distance.
-// TODO(START.EXE): alis' version never terminates once it swaps; this is a
-// plain stable bubble sort.
+// trinorme sorts the n found entities by distance (START.EXE 0x7ceb: a
+// bubble sort from the end, swapping only on a smaller distance).
+// alis' version never terminates once it swaps.
 func (v *VM) trinorme(n int) {
 	for swapped := true; swapped; {
 		swapped = false
-		for i := 1; i < n; i++ {
+		for i := n - 1; i > 0; i-- {
 			a, b := v.buf32(i-1), v.buf32(i)
 			if b < a {
 				v.setBuf32(i-1, b)
@@ -348,61 +349,30 @@ func (v *VM) trinorme(n int) {
 	}
 }
 
-// nearest-first collection shared by the sview* searches
-func (v *VM) sviewStart() int {
+// sviewSearch is the loop shared by cnear*/cview* (START.EXE 0x7dc4): every
+// entity that passes match and calcnear is listed, or only the nearest one
+// when fallent is clear. The distance list sits in the buffer.
+func (v *VM) sviewSearch(match func(src, tgt uint32) bool) {
+	idx := 0
 	if v.fallent == 0 {
 		v.setBuf32(0, 0x7fffffff)
 		v.tablent[0] = -1
-		return 1
+		idx = 1
 	}
-	return 0
-}
-
-// sviewAdd records a match; false when the table is full.
-func (v *VM) sviewAdd(idx *int, ent int16, value int32) {
-	if v.fallent == 0 {
-		if v.buf32(*idx-1) <= value {
-			return
-		}
-		*idx--
-	} else if tabentFull(*idx) {
-		return
-	}
-	v.setBuf32(*idx, value)
-	v.tablent[*idx] = ent
-	*idx++
-}
-
-func (v *VM) sviewEnd(idx int) {
-	v.tablent[idx] = -1
-	if v.fallent != 0 {
-		v.trinorme(idx)
-	}
-	v.fallent = 0
-	crstent(v)
-}
-
-func (v *VM) sviewtyp() {
-	id := int16(v.varD7)
-	if id < 0 {
-		id &= 0xff
-	}
-	idx := v.sviewStart()
-	ent := int16(0)
 	src := v.script.vramOrg
-	for {
+	for ent := int16(0); ; {
 		tgt := uint32(v.r32(v.atent + uint32(int32(ent))))
-		if int32(id) == int32(v.ru16(tgt-0x10)) && v.r16(tgt+scrGroup) == v.r16(src+scrGroup) && src != tgt {
-			var value int32
-			if !v.calcnear(src, tgt, &value) {
-				if v.fallent != 0 || v.buf32(idx-1) > value {
-					if v.fallent == 0 {
+		if match(src, tgt) {
+			if dist, ok := v.calcnear(src, tgt); ok {
+				if v.fallent == 0 {
+					if dist < v.buf32(idx-1) {
 						idx--
+						v.setBuf32(idx, dist)
+						v.tablent[idx] = ent
+						idx++
 					}
-					if tabentFull(idx) {
-						break
-					}
-					v.setBuf32(idx, value)
+				} else if !tabentFull(idx) {
+					v.setBuf32(idx, dist)
 					v.tablent[idx] = ent
 					idx++
 				}
@@ -413,154 +383,175 @@ func (v *VM) sviewtyp() {
 			break
 		}
 	}
-	v.sviewEnd(idx)
-}
-
-// TODO(START.EXE): multimat/traitmat/clipmat read the form headers like the
-// big-endian builds (see NOTES.md).
-func (v *VM) multimat(formeaddr, baseform int32, wforme int16) int16 {
-	length := int16(v.r8(uint32(formeaddr - 2)))
-	if length == 0 {
-		return wforme
+	v.tablent[idx] = -1
+	if v.fallent != 0 {
+		v.trinorme(idx)
 	}
-	for i := int32(0); i < int32(length); i++ {
-		wforme = v.r16(uint32(formeaddr + i*2))
-		if wforme > -1 {
-			wforme = int16(v.traitmat(baseform, int32(wforme)))
-			if wforme != 0 {
-				return wforme
-			}
-		}
+	v.fallent = 0
+	crstent(v)
+}
+
+// matcher is START.EXE 0x7ac6: whether the target's current form carries a
+// material of matmask; mono forms leave their material in goodmat. The
+// self test compares only the low 16 bits of the addresses.
+func (v *VM) matcher(src, tgt uint32) bool {
+	f := v.cforme(tgt)
+	if f < 0 || uint16(src) == uint16(tgt) {
+		return false
 	}
-	return wforme
-}
-
-func (v *VM) traitmat(baseform, wforme int32) uint32 {
-	wforme *= 2
-	formeaddr := int16(v.r32(uint32(baseform+wforme)) + baseform)
-	fa := int32(formeaddr)
-	if v.r16(uint32(fa)) < 0 {
-		return uint32(int32(v.multimat(fa+2, baseform, int16(wforme))))
+	org := uint32(v.r32(tgt - 0x14))
+	base := org + uint32(v.r32(org+0xe))
+	base += uint32(v.r32(base + 6))
+	form := base + uint32(int32(v.r16(base+uint32(int32(f))*2)))
+	if int8(v.mem[form]) < 0 {
+		return v.multimat(base, form+2)
 	}
-	return uint32(int32(v.monomat(fa + 2)))
+	return v.monomat(form + 2)
 }
 
-func (v *VM) monomat(formeaddr int32) int16 {
-	v.goodmat = v.ru16(uint32(formeaddr))
-	return v.matmask & int16(v.goodmat)
-}
-
-func (v *VM) clipmat(src, tgt uint32) int16 {
-	wforme := v.cforme(tgt)
-	if wforme > -1 && src != tgt {
-		org := uint32(v.r32(tgt - 0x14))
-		addr := v.r32(org+0xe) + int32(org)
-		baseform := v.r32(uint32(addr+6)) + addr
-		formeaddr := int32(v.r16(uint32(baseform+int32(wforme)*2))) + baseform
-		if v.r16(uint32(formeaddr)) < 0 {
-			return v.multimat(formeaddr+2, baseform, wforme)
-		}
-		return v.monomat(formeaddr + 2)
+// multimat (0x7b2e) tries the count+1 sub-forms whose index is not negative;
+// the count is the header's high byte.
+func (v *VM) multimat(base, at uint32) bool {
+	n := v.mem[at-1]
+	if n == 0 {
+		return false
 	}
-	return wforme
-}
-
-func (v *VM) sviewmat() {
-	idx := v.sviewStart()
-	ent := int16(0)
-	src := v.script.vramOrg
 	for {
-		tgt := uint32(v.r32(v.atent + uint32(int32(ent))))
-		if v.r16(src+scrGroup) == v.r16(tgt+scrGroup) && v.clipmat(src, tgt) != 0 {
-			var value int32
-			if !v.calcnear(src, tgt, &value) {
-				v.sviewAdd(&idx, ent, value)
-			}
+		n--
+		sub := v.r16(at)
+		at += 2
+		if sub >= 0 && v.submat(base, sub) {
+			return true
 		}
-		ent = v.r16(v.atent + 4 + uint32(int32(ent)))
-		if ent == 0 {
-			break
+		if n == 0xff {
+			return false
 		}
 	}
-	v.sviewEnd(idx)
 }
 
-func (v *VM) sviewent() {
+// submat (0x7b5b) tests the whole header word's sign, unlike matcher.
+func (v *VM) submat(base uint32, sub int16) bool {
+	at := base + uint32(int32(v.r16(base+uint32(int32(sub))*2)))
+	if v.r16(at) >= 0 {
+		return v.multimat(base, at+2)
+	}
+	return v.monomat(at + 2)
+}
+
+// monomat is 0x7b74.
+func (v *VM) monomat(at uint32) bool {
+	v.goodmat = v.ru16(at)
+	return v.goodmat&uint16(v.matmask) != 0
+}
+
+// setMatmaskByte: the searches store only the low byte of the mask.
+func (v *VM) setMatmaskByte() {
+	v.matmask = int16(uint16(v.matmask)&0xff00 | uint16(uint8(v.varD7)))
+}
+
+// readNorme squares the 16-bit operand unsigned (mul dx).
+func (v *VM) readNorme() {
+	v.readexecOpername()
+	d := uint32(uint16(v.varD7))
+	v.valnorme = d * d
+}
+
+func (v *VM) readChamp() {
+	v.readexecOpername()
+	v.valchamp = int16(v.varD7)
+}
+
+func (v *VM) nearent() {
+	v.readexecOpername()
 	if v.fallent != 0 {
 		v.varD7 = -1
 	}
-	idx := v.sviewStart()
-	ent := int16(0)
-	src := v.script.vramOrg
-	for {
-		tgt := uint32(v.r32(v.atent + uint32(int32(ent))))
-		if (v.varD7 < 0 || v.varD7 == int32(v.ru16(tgt-0x0e))) && v.r16(tgt+0x30) == v.r16(src+0x30) && src != tgt {
-			var value int32
-			if !v.calcnear(src, tgt, &value) {
-				v.sviewAdd(&idx, ent, value)
-			}
-		}
-		ent = v.r16(v.atent + 4 + uint32(int32(ent)))
-		if ent == 0 {
-			break
-		}
-	}
-	v.sviewEnd(idx)
+	id := int16(v.varD7)
+	v.sviewSearch(func(src, tgt uint32) bool {
+		return (id < 0 || id == v.r16(tgt-0x0e)) && v.r16(tgt+scrGroup) == v.r16(src+scrGroup) && src != tgt
+	})
 }
 
-func (v *VM) readNorme() {
-	v.readexecOpername()
-	v.valnorme = uint32(v.varD7) * uint32(v.varD7)
+func (v *VM) neartyp() {
+	id := v.read16()
+	v.varD7 = int32(id)
+	v.sviewSearch(func(src, tgt uint32) bool {
+		return id == v.r16(tgt-0x10) && v.r16(tgt+scrGroup) == v.r16(src+scrGroup) && src != tgt
+	})
+}
+
+func (v *VM) nearmat() {
+	v.sviewSearch(func(src, tgt uint32) bool {
+		return v.r16(tgt+scrGroup) == v.r16(src+scrGroup) && v.matcher(src, tgt)
+	})
+}
+
+// nearcla: in START.EXE (0x7fb5) the nearest-only path swaps bx/dx as 16-bit
+// registers and then corrupts its pointers; the port does what the other
+// searches do.
+func (v *VM) nearcla() {
+	w := v.read16()
+	v.varD7 = int32(w)
+	cla := int8(w)
+	v.sviewSearch(func(src, tgt uint32) bool {
+		return cla == int8(v.mem[tgt+0x4c]) && v.r16(tgt+scrGroup) == v.r16(src+scrGroup) && src != tgt
+	})
 }
 
 func cnearent(v *VM) {
 	v.fview = 0
 	v.readNorme()
-	v.readexecOpername()
-	v.sviewent()
+	v.nearent()
 }
 
 func cneartyp(v *VM) {
 	v.fview = 0
 	v.readNorme()
-	v.varD7 = int32(v.read16())
-	v.sviewtyp()
+	v.neartyp()
 }
 
 func cnearmat(v *VM) {
 	v.fview = 0
 	v.readNorme()
 	v.readexecOpername()
-	v.matmask = int16(v.varD7)
-	v.sviewmat()
+	v.setMatmaskByte()
+	v.nearmat()
+}
+
+func cnearcla(v *VM) {
+	v.fview = 0
+	v.readNorme()
+	v.nearcla()
 }
 
 func cviewent(v *VM) {
 	v.fview = 1
 	v.readNorme()
-	v.readexecOpername()
-	v.valchamp = int16(v.varD7)
-	v.readexecOpername()
-	v.sviewent()
+	v.readChamp()
+	v.nearent()
 }
 
 func cviewtyp(v *VM) {
 	v.fview = 1
 	v.readNorme()
-	v.readexecOpername()
-	v.valchamp = int16(v.varD7)
-	v.varD7 = int32(v.read16())
-	v.sviewtyp()
+	v.readChamp()
+	v.neartyp()
 }
 
 func cviewmat(v *VM) {
 	v.fview = 1
 	v.readNorme()
+	v.readChamp()
 	v.readexecOpername()
-	v.valchamp = int16(v.varD7)
-	v.readexecOpername()
-	v.matmask = int16(v.varD7)
-	v.sviewmat()
+	v.setMatmaskByte()
+	v.nearmat()
+}
+
+func cviewcla(v *VM) {
+	v.fview = 1
+	v.readNorme()
+	v.readChamp()
+	v.nearcla()
 }
 
 func corient(v *VM) {

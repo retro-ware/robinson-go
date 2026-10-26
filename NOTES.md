@@ -19,14 +19,11 @@ every 20 ms.
 
 ## alis behaviour still to check against START.EXE
 
-- `trinorme` (sort for near/view with callentity): reads buffer[-1], can loop forever.
-- `traitmat` / `multimat` / `clipmat`: Atari-derived, s16 truncation of form addresses.
 - `cescape`: truncates `calscal` to s16.
 - `csetmouse`: y comes from a stale D6.
 - `cworld`: alis writes vram+0xffde/0xffdf; the port writes ctx -0x22/-0x21.
 - `cdefworld`: alis writes all 6 bytes to the same address.
-- Handlers missing in alis for v3.1 (consume no operands): cfindmat, cnearcla, cviewcla,
-  csczoom, cscaset, cscamov, cscsun.
+- Handlers missing in alis for v3.1 (consume no operands): csczoom, cscaset, cscamov, cscsun.
 - `cfreadb`: returns before reading the length operand when the handle is empty.
 - `walkland` head bob sampling; `landalti` flag==1 pointer add is a no-op.
 - `cgettime`: alis returns 0,0,0; original returns the DOS time.
@@ -83,6 +80,14 @@ Reference bugs found this way (fixed in the reference, the port follows START.EX
 - ctstset, cwtstmov, cwftstmov were missing in alis (now ported from 0x74d4/0x7248/0x729a).
 - Also ported from START.EXE (missing in alis for v3.1): cinitab, cfcreat, cfdel, cfwritei,
   cpicture, cautomode, ccancel, oright; the error screen texts (0x1c626) are `alisErrors`.
+- near/view/find (0x7ac6..0x842e, reference in src/near31.h): 16-bit coordinate differences,
+  signed 32-bit distance compares, the norm squared as u16 (`mul dx`), the cone factor
+  zero-extended; the material matcher compares the low 16 bits of the addresses, a sub-form
+  header tests the whole word's sign; the searches write only the low byte of matmask;
+  cfindtyp/cneartyp compare the raw type word. alis' trinorme never ended once it swapped.
+  cfindmat loads goodmat from matent (original bug, kept). cnearcla/cviewcla take a word
+  operand; START.EXE's nearest-only path there swaps bx/dx as 16-bit registers and corrupts
+  its pointers, so the port follows the other searches.
 - The test opcodes latch the own mirror flag (0x1602e) for monoform; cavtstmov doesn't set it.
 
 Differential tests (`go test -tags difftest ./internal/alis`, internal/alis/cref links

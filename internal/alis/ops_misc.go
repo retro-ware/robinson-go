@@ -44,9 +44,6 @@ func cfindcla(v *VM) {
 	crstent(v)
 }
 
-// TODO(START.EXE): alis has no v3 cnearcla/cviewcla (no operands).
-func cnearcla(v *VM) {}
-func cviewcla(v *VM) {}
 
 func (v *VM) instru() {
 	v.readexecOpername()

@@ -438,6 +438,8 @@ var fuzzOps = []byte{
 	0x53, 0x54, 0x55, 0x56, 0x57, 0x58, 0x60, 0x8e, 0x8f, 0xa2, 0xa3, 0xa4, 0xa5, 0xf9,
 	// cinitab, cpicture, cautomode, ccancel (file ops stay out: random names)
 	0x6f, 0x81, 0xd9, 0xdb,
+	// cnearent..cviewmat, cfindmat, cfindtyp, cnearcla, cviewcla
+	0x59, 0x5a, 0x5b, 0x5c, 0x5d, 0x5e, 0x93, 0x94, 0xcb, 0xcc,
 }
 
 // TestOpcodeFuzz runs the game to a live state in both VMs, then from that
@@ -473,6 +475,8 @@ func TestOpcodeFuzz(t *testing.T) {
 		rr.D6, rr.D7 = int32(r.Uint32()), int32(int16(r.Uint32()))
 		v.setRegs(rr)
 		ent.Tstinv = uint8(r.IntN(2))
+		ent.Fallent = uint8(r.IntN(2))
+		ent.Matmask = int16(r.Uint32())
 		v.setEnt(ent)
 		v.err = nil
 		ok := func() (ok bool) {

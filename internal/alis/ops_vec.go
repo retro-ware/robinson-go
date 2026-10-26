@@ -150,20 +150,43 @@ func cworld(v *VM) {
 	v.w8(v.script.vramOrg-0x21, v.read8())
 }
 
-// TODO(START.EXE): alis has no v3 cfindmat (no operands).
-func cfindmat(v *VM) {}
-
-func cfindtyp(v *VM) {
-	v.varD7 = int32(v.read16())
-	if v.varD7 < 0 {
-		v.varD7 &= 0xff
+// cfindmat lists the entities whose form carries a material of the mask
+// (START.EXE 0x7b89). The original loads goodmat from matent instead of
+// storing it there.
+func cfindmat(v *VM) {
+	v.readexecOpername()
+	v.setMatmaskByte()
+	src := v.script.vramOrg
+	idx := 0
+	for ent := int16(0); ; {
+		tgt := uint32(v.r32(v.atent + uint32(int32(ent))))
+		if v.matcher(src, tgt) && !tabentFull(idx) {
+			v.goodmat = uint16(v.matent[idx])
+			v.tablent[idx] = ent
+			idx++
+			if v.fallent == 0 {
+				break
+			}
+		}
+		ent = v.r16(v.atent + 4 + uint32(int32(ent)))
+		if ent == 0 {
+			break
+		}
 	}
-	id := int16(v.varD7)
+	v.tablent[idx] = -1
+	v.fallent = 0
+	crstent(v)
+}
+
+// cfindtyp compares the raw type word (START.EXE 0x7bef).
+func cfindtyp(v *VM) {
+	id := v.read16()
+	v.varD7 = int32(id)
 	ent := int16(0)
 	idx := 0
 	for {
 		tgt := uint32(v.r32(v.atent + uint32(int32(ent))))
-		if int32(id) == int32(v.ru16(tgt-0x10)) && v.script.vramOrg != tgt {
+		if id == v.r16(tgt-0x10) && v.script.vramOrg != tgt {
 			if tabentFull(idx) {
 				break
 			}
@@ -174,7 +197,7 @@ func cfindtyp(v *VM) {
 				break
 			}
 		}
-		ent = v.r16(v.atent + 4 + uint32(int32(ent)))
+		ent = v.r16(v.atent + uint32(int32(ent)) + 4)
 		if ent == 0 {
 			break
 		}

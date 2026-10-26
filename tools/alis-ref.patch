@@ -388,8 +388,265 @@ index d31d91a..7cb7f50 100644
  
              printf("\n");
              ALIS_DEBUG(EDebugSystem, "The ALIS VM has been stopped.\n");
+diff --git a/src/near31.h b/src/near31.h
+new file mode 100644
+index 0000000..ef222b4
+--- /dev/null
++++ b/src/near31.h
+@@ -0,0 +1,251 @@
++// START.EXE (ALIS 3.1, Robinson's Requiem PC) near/view/find searches,
++// 0x7ac6..0x842e: material matcher, distance and view cone (16-bit
++// differences, signed 32-bit compares), nearest-only or sorted lists.
++// Included by opcodes.c after crstent.
++#pragma once
++
++#define NEAR31 (alis.platform.version == 31)
++
++static inline s32 near31_buf(int i) { s32 x; memcpy(&x, alis.buffer + i * 4, 4); return x; }
++static inline void near31_setbuf(int i, s32 x) { memcpy(alis.buffer + i * 4, &x, 4); }
++
++// 0x82bf
++static int near31_calc(u32 src, u32 tgt, s32 *dist)
++{
++    s16 dx = (s16)(xread16(tgt + 0) - xread16(src + 0));
++    s16 dy = (s16)(xread16(tgt + 8) - xread16(src + 8));
++    s16 dz = (s16)(xread16(tgt + 16) - xread16(src + 16));
++    *dist = (s32)((u32)(dx * dx) + (u32)(dy * dy) + (u32)(dz * dz));
++    if (*dist > (s32)alis.valnorme)
++        return 0;
++    if (alis.fview == 0)
++        return 1;
++    s32 dot = (s32)((u32)((s8)xread8(src + 0x34) * dx) + (u32)((s8)xread8(src + 0x38) * dy) + (u32)((s8)xread8(src + 0x3c) * dz));
++    return *dist <= (s32)((u32)dot * (u32)(u16)alis.valchamp);
++}
++
++static int near31_multimat(u32 base, u32 at);
++
++// 0x7b74
++static int near31_monomat(u32 at)
++{
++    alis.goodmat = (u16)xread16(at);
++    return (alis.goodmat & (u16)alis.matmask) != 0;
++}
++
++// 0x7b5b
++static int near31_submat(u32 base, s16 sub)
++{
++    u32 at = base + (u32)(s32)xread16(base + (u32)((s32)sub * 2));
++    if (xread16(at) >= 0)
++        return near31_multimat(base, at + 2);
++    return near31_monomat(at + 2);
++}
++
++// 0x7b2e
++static int near31_multimat(u32 base, u32 at)
++{
++    u8 n = xread8(at - 1);
++    if (n == 0)
++        return 0;
++    for (;;)
++    {
++        n--;
++        s16 sub = xread16(at);
++        at += 2;
++        if (sub >= 0 && near31_submat(base, sub))
++            return 1;
++        if (n == 0xff)
++            return 0;
++    }
++}
++
++// 0x7ac6
++static int near31_matcher(u32 src, u32 tgt)
++{
++    s16 f = xread16(tgt - 0x1a);
++    if (f < 0 || (u16)src == (u16)tgt)
++        return 0;
++    u32 org = (u32)xread32(tgt - 0x14);
++    u32 base = org + (u32)xread32(org + 0xe);
++    base += (u32)xread32(base + 6);
++    u32 form = base + (u32)(s32)xread16(base + (u32)((s32)f * 2));
++    if ((s8)xread8(form) < 0)
++        return near31_multimat(base, form + 2);
++    return near31_monomat(form + 2);
++}
++
++// 0x7ceb
++static void near31_sort(int n)
++{
++    for (int swapped = 1; swapped;)
++    {
++        swapped = 0;
++        for (int i = n - 1; i > 0; i--)
++        {
++            s32 a = near31_buf(i - 1), b = near31_buf(i);
++            if (b < a)
++            {
++                near31_setbuf(i - 1, b);
++                near31_setbuf(i, a);
++                s16 t = alis.tablent[i - 1];
++                alis.tablent[i - 1] = alis.tablent[i];
++                alis.tablent[i] = t;
++                swapped = 1;
++            }
++        }
++    }
++}
++
++enum { NEAR31_ENT, NEAR31_TYP, NEAR31_MAT, NEAR31_CLA };
++
++static int near31_match(int kind, s16 id, u32 src, u32 tgt)
++{
++    int same = xread16(tgt + 0x30) == xread16(src + 0x30);
++    switch (kind)
++    {
++    case NEAR31_ENT: return (id < 0 || id == xread16(tgt - 0xe)) && same && src != tgt;
++    case NEAR31_TYP: return id == xread16(tgt - 0x10) && same && src != tgt;
++    case NEAR31_MAT: return same && near31_matcher(src, tgt);
++    default:         return (s8)id == (s8)xread8(tgt + 0x4c) && same && src != tgt;
++    }
++}
++
++// 0x7dc4 and its copies
++static void near31_search(int kind, s16 id)
++{
++    int idx = 0;
++    if (alis.fallent == 0)
++    {
++        near31_setbuf(0, 0x7fffffff);
++        alis.tablent[0] = -1;
++        idx = 1;
++    }
++    u32 src = alis.script->vram_org;
++    for (s16 ent = 0;;)
++    {
++        u32 tgt = (u32)xread32(alis.atent + ent);
++        s32 dist;
++        if (near31_match(kind, id, src, tgt) && near31_calc(src, tgt, &dist))
++        {
++            if (alis.fallent == 0)
++            {
++                if (dist < near31_buf(idx - 1))
++                {
++                    idx--;
++                    near31_setbuf(idx, dist);
++                    alis.tablent[idx++] = ent;
++                }
++            }
++            else if (idx < 255)
++            {
++                near31_setbuf(idx, dist);
++                alis.tablent[idx++] = ent;
++            }
++        }
++        ent = xread16(alis.atent + 4 + ent);
++        if (ent == 0)
++            break;
++    }
++    alis.tablent[idx] = -1;
++    if (alis.fallent)
++        near31_sort(idx);
++    alis.fallent = 0;
++    crstent();
++}
++
++static void near31_norme(void)
++{
++    readexec_opername();
++    u32 d = (u16)alis.varD7;
++    alis.valnorme = d * d;
++}
++
++static void near31_matmask(void)
++{
++    alis.matmask = (s16)(((u16)alis.matmask & 0xff00) | (u8)alis.varD7);
++}
++
++// cnearent/cneartyp/cnearmat/cnearcla and the cview* forms (with the cone)
++static void near31(int kind, int view)
++{
++    alis.fview = view;
++    near31_norme();
++    if (view)
++    {
++        readexec_opername();
++        alis.valchamp = (s16)alis.varD7;
++    }
++    s16 id = 0;
++    switch (kind)
++    {
++    case NEAR31_ENT:
++        readexec_opername();
++        if (alis.fallent)
++            alis.varD7 = -1;
++        id = (s16)alis.varD7;
++        break;
++    case NEAR31_MAT:
++        readexec_opername();
++        near31_matmask();
++        break;
++    default:
++        id = (s16)script_read16();
++        alis.varD7 = id;
++        break;
++    }
++    near31_search(kind, id);
++}
++
++// 0x7b89: the original loads goodmat from matent instead of storing it
++static void cfindmat31(void)
++{
++    readexec_opername();
++    near31_matmask();
++    u32 src = alis.script->vram_org;
++    int idx = 0;
++    for (s16 ent = 0;;)
++    {
++        u32 tgt = (u32)xread32(alis.atent + ent);
++        if (near31_matcher(src, tgt) && idx < 255)
++        {
++            alis.goodmat = (u16)alis.matent[idx];
++            alis.tablent[idx++] = ent;
++            if (alis.fallent == 0)
++                break;
++        }
++        ent = xread16(alis.atent + 4 + ent);
++        if (ent == 0)
++            break;
++    }
++    alis.tablent[idx] = -1;
++    alis.fallent = 0;
++    crstent();
++}
++
++// 0x7bef: the raw type word
++static void cfindtyp31(void)
++{
++    s16 id = (s16)script_read16();
++    alis.varD7 = id;
++    int idx = 0;
++    for (s16 ent = 0;;)
++    {
++        u32 tgt = (u32)xread32(alis.atent + ent);
++        if (id == xread16(tgt - 0x10) && alis.script->vram_org != tgt)
++        {
++            if (idx >= 255)
++                break;
++            alis.matent[idx] = 0;
++            alis.tablent[idx++] = ent;
++            if (alis.fallent == 0)
++                break;
++        }
++        ent = xread16(alis.atent + 4 + ent);
++        if (ent == 0)
++            break;
++    }
++    alis.tablent[idx] = -1;
++    alis.fallent = 0;
++    crstent();
++}
 diff --git a/src/opcodes.c b/src/opcodes.c
-index 1151bed..e864c6a 100644
+index 1151bed..d830b57 100644
 --- a/src/opcodes.c
 +++ b/src/opcodes.c
 @@ -1030,8 +1030,52 @@ static void cswitching(void)
@@ -499,7 +756,90 @@ index 1151bed..e864c6a 100644
      if (alis.platform.version == 10)
      {
          // v1.0 handler is relative, same as cftstmov
-@@ -4815,6 +4874,18 @@ static void cnoise(void)
+@@ -4256,9 +4315,17 @@ static void near_v6(int kind)
+     crstent();
+ }
+ 
++#include "near31.h"
++
+ // Codopname no. 090 opcode 0x59 cnearent
+ void cnearent(void)
+ {
++    if (NEAR31)
++    {
++        near31(NEAR31_ENT, 0);
++        return;
++    }
++
+     if (alis.platform.version >= 60)
+     {
+         near_v6(1);
+@@ -4275,6 +4342,12 @@ void cnearent(void)
+ // Codopname no. 091 opcode 0x5a cneartyp
+ static void cneartyp(void)
+ {
++    if (NEAR31)
++    {
++        near31(NEAR31_TYP, 0);
++        return;
++    }
++
+     if (alis.platform.version >= 60)
+     {
+         near_v6(0);
+@@ -4299,6 +4372,12 @@ static void cneartyp(void)
+ // Codopname no. 092 opcode 0x5b cnearmat
+ static void cnearmat(void)
+ {
++    if (NEAR31)
++    {
++        near31(NEAR31_MAT, 0);
++        return;
++    }
++
+     if (alis.platform.version >= 60)
+     {
+         near_v6(2);
+@@ -4316,6 +4395,12 @@ static void cnearmat(void)
+ // Codopname no. 093 opcode 0x5c cviewent
+ static void cviewent(void)
+ {
++    if (NEAR31)
++    {
++        near31(NEAR31_ENT, 1);
++        return;
++    }
++
+     if (alis.platform.version >= 60)
+     {
+         near_v6(1);
+@@ -4334,6 +4419,12 @@ static void cviewent(void)
+ // Codopname no. 094 opcode 0x5d cviewtyp
+ static void cviewtyp(void)
+ {
++    if (NEAR31)
++    {
++        near31(NEAR31_TYP, 1);
++        return;
++    }
++
+     if (alis.platform.version >= 60)
+     {
+         near_v6(0);
+@@ -4360,6 +4451,12 @@ static void cviewtyp(void)
+ // Codopname no. 095 opcode 0x5e cviewmat
+ static void cviewmat(void)
+ {
++    if (NEAR31)
++    {
++        near31(NEAR31_MAT, 1);
++        return;
++    }
++
+     if (alis.platform.version >= 60)
+     {
+         near_v6(2);
+@@ -4815,6 +4912,18 @@ static void cnoise(void)
  // Codopname no. 112 opcode 0x6f cinitab
  static void cinitab(void)
  {
@@ -518,7 +858,7 @@ index 1151bed..e864c6a 100644
      if (alis.platform.uid == EGameRobinsonsRequiem3DO)
      {
          s16 off = (s16)script_read16();
-@@ -4894,6 +4965,26 @@ static void cfclose(void)
+@@ -4894,6 +5003,26 @@ static void cfclose(void)
  // Codopname no. 115 opcode 0x72 cfcreat
  static void cfcreat(void)
  {
@@ -545,7 +885,7 @@ index 1151bed..e864c6a 100644
      if (alis.platform.uid == EGameRobinsonsRequiem3DO)
      {
          char name[kPathMaxLen] = {0}, path[kPathMaxLen] = {0};
-@@ -4935,6 +5026,17 @@ static void cfcreat(void)
+@@ -4935,6 +5064,17 @@ static void cfcreat(void)
  // Codopname no. 116 opcode 0x73 cfdel
  static void cfdel(void)
  {
@@ -563,7 +903,7 @@ index 1151bed..e864c6a 100644
      if (alis.platform.uid == EGameRobinsonsRequiem3DO)
      {
          char name[kPathMaxLen] = {0}, path[kPathMaxLen] = {0};
-@@ -5014,6 +5116,16 @@ static void cfwritev(void)
+@@ -5014,6 +5154,16 @@ static void cfwritev(void)
  // Codopname no. 119 opcode 0x76 cfwritei
  static void cfwritei(void)
  {
@@ -580,7 +920,7 @@ index 1151bed..e864c6a 100644
      if (alis.platform.uid == EGameRobinsonsRequiem3DO)
      {
          char name[kPathMaxLen] = {0};
-@@ -5415,6 +5527,12 @@ static void cpmode(void)
+@@ -5415,6 +5565,12 @@ static void cpmode(void)
  // Codopname no. 130 opcode 0x81 cpicture
  static void cpicture(void)
  {
@@ -593,7 +933,7 @@ index 1151bed..e864c6a 100644
      if (alis.platform.version == 10)
      {
          alis.flagmain = 0;
-@@ -5755,6 +5873,7 @@ static void cescape(void)
+@@ -5755,6 +5911,7 @@ static void cescape(void)
  // Codopname no. 143 opcode 0x8e cvtstmov
  static void cvtstmov(void)
  {
@@ -601,7 +941,7 @@ index 1151bed..e864c6a 100644
      alis.wcx = (s8)xread8(alis.script->vram_org + ALIS_SCR_WCX2) + xread16(alis.script->vram_org + ALIS_SCR_WCX);
      alis.wcy = (s8)xread8(alis.script->vram_org + ALIS_SCR_WCY2) + xread16(alis.script->vram_org + ALIS_SCR_WCY);
      alis.wcz = (s8)xread8(alis.script->vram_org + ALIS_SCR_WCZ2) + xread16(alis.script->vram_org + ALIS_SCR_WCZ);
-@@ -5779,6 +5898,7 @@ static void cvtstmov_v6(void)
+@@ -5779,6 +5936,7 @@ static void cvtstmov_v6(void)
  // Codopname no. 144 opcode 0x8f cvftstmov
  static void cvftstmov(void)
  {
@@ -609,7 +949,33 @@ index 1151bed..e864c6a 100644
      alis.wcx = (s8)xread8(alis.script->vram_org + ALIS_SCR_WCX2) + xread16(alis.script->vram_org + ALIS_SCR_WCX);
      alis.wcy = (s8)xread8(alis.script->vram_org + ALIS_SCR_WCY2) + xread16(alis.script->vram_org + ALIS_SCR_WCY);
      alis.wcz = (s8)xread8(alis.script->vram_org + ALIS_SCR_WCZ2) + xread16(alis.script->vram_org + ALIS_SCR_WCZ);
-@@ -6714,9 +6834,26 @@ static void cwmov(void)
+@@ -5920,6 +6078,12 @@ static void cworld(void)
+ // Codopname no. 148 opcode 0x93 cfindmat
+ static void cfindmat(void)
+ {
++    if (NEAR31)
++    {
++        cfindmat31();
++        return;
++    }
++
+     if (alis.platform.version == 10)
+     {
+         readexec_opername();
+@@ -5965,6 +6129,12 @@ static void cfindmat_v6(void)
+ // Codopname no. 149 opcode 0x94 cfindtyp
+ static void cfindtyp(void)
+ {
++    if (NEAR31)
++    {
++        cfindtyp31();
++        return;
++    }
++
+     if (alis.platform.version >= 60)
+     {
+         readexec_opername_swap();
+@@ -6714,9 +6884,26 @@ static void cwmov(void)
  }
  
  // Codopname no. 164 opcode 0xa3 cwtstmov
@@ -637,7 +1003,7 @@ index 1151bed..e864c6a 100644
  }
  
  // v6 dispatch target for cwtstmov
-@@ -6733,7 +6870,11 @@ static void cwtstmov_v6(void)
+@@ -6733,7 +6920,11 @@ static void cwtstmov_v6(void)
  // Codopname no. 165 opcode 0xa4 cwftstmov
  static void cwftstmov(void)
  {
@@ -650,7 +1016,7 @@ index 1151bed..e864c6a 100644
  }
  
  // v6 dispatch target for cwftstmov
-@@ -6750,6 +6891,7 @@ static void cwftstmov_v6(void)
+@@ -6750,6 +6941,7 @@ static void cwftstmov_v6(void)
  // Codopname no. 166 opcode 0xa5 ctstform
  static void ctstform(void)
  {
@@ -658,7 +1024,33 @@ index 1151bed..e864c6a 100644
      alis.wcx = xread16(alis.script->vram_org + ALIS_SCR_WCX);
      alis.wcy = xread16(alis.script->vram_org + ALIS_SCR_WCY);
      alis.wcz = xread16(alis.script->vram_org + ALIS_SCR_WCZ);
-@@ -8202,6 +8344,12 @@ static void clinepalet(void)
+@@ -7795,6 +7987,12 @@ static void cfindcla(void)
+ // Codopname no. 204 opcode 0xcb cnearcla
+ static void cnearcla(void)
+ {
++    if (NEAR31)
++    {
++        near31(NEAR31_CLA, 0);
++        return;
++    }
++
+     if (alis.platform.version >= 60)
+     {
+         near_v6(2);
+@@ -7807,6 +8005,12 @@ static void cnearcla(void)
+ // Codopname no. 205 opcode 0xcc cviewcla
+ static void cviewcla(void)
+ {
++    if (NEAR31)
++    {
++        near31(NEAR31_CLA, 1);
++        return;
++    }
++
+     if (alis.platform.version >= 60)
+     {
+         near_v6(2);
+@@ -8202,6 +8406,12 @@ static void clinepalet(void)
  // Codopname no. 218 opcode 0xd9 cautomode
  static void cautomode(void)
  {
@@ -671,7 +1063,7 @@ index 1151bed..e864c6a 100644
      if (alis.platform.uid == EGameRobinsonsRequiem3DO)
      {
          readexec_opername();
-@@ -8229,6 +8377,13 @@ static void cautofile(void)
+@@ -8229,6 +8439,13 @@ static void cautofile(void)
  // Codopname no. 220 opcode 0xdb ccancel
  static void ccancel(void)
  {
@@ -685,7 +1077,7 @@ index 1151bed..e864c6a 100644
      ALIS_DEBUG(EDebugWarning, "MISSING: %s", __FUNCTION__);
  }
  
-@@ -9296,6 +9451,7 @@ static void ctexmap(void)
+@@ -9296,6 +9513,7 @@ static void ctexmap(void)
          // Type 1+: sprite-based texture mapping
          readexec_opername();
          xwrite32(entry + 0x10, adresdes(alis.varD7));
@@ -693,7 +1085,7 @@ index 1151bed..e864c6a 100644
          xwrite16(entry + 0x1c, xread16(alis.script->vram_org - 0xe));
          readexec_opername();
          xwrite16(entry + 0x16, alis.varD7);
-@@ -10988,6 +11144,7 @@ static void cpointpix(void)
+@@ -10988,6 +11206,7 @@ static void cpointpix(void)
      readexec_opername_saveD6();
      
      pointpix(alis.varD7, alis.varD6);
@@ -701,7 +1093,7 @@ index 1151bed..e864c6a 100644
      
      alis.varD7 = image.cxtstpix;
      cstore_continue();
-@@ -11410,7 +11567,7 @@ static void cclock(void)
+@@ -11410,7 +11629,7 @@ static void cclock(void)
  // Codopname no. 018 opcode 0x11 cret
  static void cret(void)
  {
