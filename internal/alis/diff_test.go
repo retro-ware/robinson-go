@@ -11,7 +11,9 @@ import (
 	"fmt"
 	"math/rand/v2"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/retro-ware/robinson-go/internal/alis/cref"
@@ -331,6 +333,27 @@ func TestUnpackRandom(t *testing.T) {
 	}
 }
 
+// isolate reruns the calling test alone in a child process (the C VM is
+// process-wide and other tests change it) and ends it with the child's result.
+func isolate(t *testing.T) {
+	t.Helper()
+	if os.Getenv("CREF_CHILD") != "" {
+		return
+	}
+	cmd := exec.Command(os.Args[0], "-test.run=^"+t.Name()+"$", "-test.v")
+	cmd.Env = append(os.Environ(), "CREF_CHILD=1")
+	out, err := cmd.CombinedOutput()
+	for _, l := range strings.Split(string(out), "\n") {
+		if strings.Contains(l, "diff_test.go") {
+			t.Log(strings.TrimSpace(l))
+		}
+	}
+	if err != nil {
+		t.Fatalf("child: %v", err)
+	}
+	t.Skip("passed in a child process")
+}
+
 // runHost is the rrqharness host without logging: deterministic rand, noon,
 // and a stop at maxUs.
 type runHost struct {
@@ -353,6 +376,7 @@ func (h *runHost) PollInput(us uint64, in *Input) {
 // last use of the C VM in the process, since the C state cannot be rewound.
 func runPair(t *testing.T, ms uint64) *VM {
 	t.Helper()
+	isolate(t)
 	data, _ := filepath.Abs(filepath.Join("..", "..", "orig", "cd"))
 	if _, err := os.Stat(data); err != nil {
 		t.Skip("game data not present in orig/cd")
