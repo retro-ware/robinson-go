@@ -18,7 +18,7 @@ const (
 	// little-endian and so assumes 50 Hz.
 	// TODO(START.EXE): check the original's fade and film rates.
 	timeclockHz = 50
-	paceHz      = 50        // frames and fades run at the ST's 50 Hz
+	paceHz      = 50 // frames and fades run at the ST's 50 Hz
 )
 
 type dosPal struct {

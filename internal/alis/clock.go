@@ -38,6 +38,12 @@ func (v *VM) initTimers() {
 	v.clk.loopTime = v.clk.now
 }
 
+// EventHost is a Host with scripted input: time stops at each event so
+// it applies at its exact virtual time.
+type EventHost interface {
+	NextEventUs() (uint64, bool)
+}
+
 // Now is the virtual time in µs.
 func (v *VM) Now() uint64 { return v.clk.now }
 
@@ -50,6 +56,11 @@ func (v *VM) sleep(us uint64) {
 	target := c.now + us
 	for {
 		nxt := min(target, c.nextTick, c.nextAudio, c.nextSmp)
+		if ev, ok := v.host.(EventHost); ok {
+			if at, ok := ev.NextEventUs(); ok && at < nxt {
+				nxt = max(at, c.now)
+			}
+		}
 		c.now = nxt
 		v.host.WaitUntil(c.now)
 		v.pollInput()

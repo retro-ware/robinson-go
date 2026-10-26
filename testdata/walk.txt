@@ -1,0 +1,32 @@
+5000 key Escape down
+5100 key Escape up
+10000 key Space down
+10100 key Space up
+15000 key Return down
+15100 key Return up
+40000 mouse 110 140
+40100 lb down
+40200 lb up
+50000 mouse 160 165
+50100 lb down
+50200 lb up
+55000 key Up down
+60000 key Up up
+61000 key Left down
+62500 key Left up
+63000 key Up down
+70000 key Up up
+71000 key Right down
+72000 key Right up
+75000 mouse 160 60
+75100 lb down
+75200 lb up
+78000 mouse 60 80
+78100 lb down
+78200 lb up
+80000 key Up down
+95000 key Up up
+96000 key Left down
+99000 key Left up
+100000 key Up down
+115000 key Up up
