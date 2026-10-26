@@ -21,8 +21,6 @@ every 20 ms.
 
 - `cescape`: truncates `calscal` to s16.
 - `csetmouse`: y comes from a stale D6.
-- `cworld`: alis writes vram+0xffde/0xffdf; the port writes ctx -0x22/-0x21.
-- `cdefworld`: alis writes all 6 bytes to the same address.
 - `cfreadb`: returns before reading the length operand when the handle is empty.
 - `walkland` head bob sampling; `landalti` flag==1 pointer add is a no-op.
 - `cgettime`: alis returns 0,0,0; original returns the DOS time.
@@ -88,6 +86,8 @@ Reference bugs found this way (fixed in the reference, the port follows START.EX
 - Zero flag after an add destination (`cloop`): every byte/word add sets it from the result,
   the string forms leave it set, the stack push clears it, a dead ahimb/ahimw sets it to
   vram == 0 (alis set it only for alocb/alocw/adirb/adirw).
+- `cdefworld` copies 5 bytes in a row (alis: 6 bytes to one address); `cworld` writes the word
+  at vram-0x22 (alis: vram+0xffde).
 - Camera words of the current screen (missing in alis): cscamov/cscaset 0x34 (add/set),
   csczoom 0x3a, cscsun 0x7c (four words); the screen is looked up after the operands.
 - The test opcodes latch the own mirror flag (0x1602e) for monoform; cavtstmov doesn't set it.

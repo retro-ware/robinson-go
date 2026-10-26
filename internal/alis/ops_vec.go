@@ -135,16 +135,18 @@ func cvmov(v *VM) {
 	v.add16(vram+scrWCZ, int16(int8(v.r8(vram+scrWCZ2))))
 }
 
-// TODO(START.EXE): alis writes all six bytes to the same address.
+// cdefworld copies five inline bytes (START.EXE 0x9ad4); alis writes six
+// bytes to the same address.
 func cdefworld(v *VM) {
 	offset := v.read16()
 	at := uint32(int32(v.script.vramOrg) + int32(offset))
-	for range 6 {
-		v.w8(at, v.read8())
+	for i := range uint32(5) {
+		v.w8(at+i, v.read8())
 	}
 }
 
-// alis writes to vram+0xffde/0xffdf; the world bytes are at -0x22/-0x21.
+// cworld sets the world word at -0x22 (START.EXE 0x9ae3); alis writes to
+// vram+0xffde/0xffdf.
 func cworld(v *VM) {
 	v.w8(v.script.vramOrg-0x22, v.read8())
 	v.w8(v.script.vramOrg-0x21, v.read8())
