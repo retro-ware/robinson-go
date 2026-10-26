@@ -231,6 +231,7 @@ type VM struct {
 
 	img      image
 	aud      audioState
+	mv2      mv2State
 	scr      screenState
 	film     film
 	filmnode uint16

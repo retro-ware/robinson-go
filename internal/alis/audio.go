@@ -226,7 +226,17 @@ func (v *VM) audioRelocate(lo, hi uint32, delta int32) {
 		a.muflag = 0
 	}
 	a.mupnote = moved(a.mupnote, lo, hi, delta)
-	// TODO(audio): relocate the MV1/MV2 player pointers.
+	// TODO(audio): relocate the MV1 player pointers.
+	for i := range v.mv2.voices {
+		vc := &v.mv2.voices[i]
+		sample := vc.sample
+		vc.sample = moved(vc.sample, lo, hi, delta)
+		vc.startsam1 = moved(vc.startsam1, lo, hi, delta)
+		vc.startsam2 = moved(vc.startsam2, lo, hi, delta)
+		if sample != 0 && vc.sample == 0 {
+			*vc = mv2Voice{}
+		}
+	}
 	for i := range a.channels {
 		c := &a.channels[i]
 		if c.addr < lo || c.addr >= v.finmem {
@@ -275,9 +285,15 @@ func (v *VM) mixAudio(pcm []int16) {
 	a := &v.aud
 	n := len(pcm)
 	const adv = 2
-	if a.muflag > 0 {
-		// TODO(audio): MV1/MV2 music.
-	}
+	// TODO(audio): MV1 music.
+	mframes := v.mixMusic(pcm)
+	defer func() {
+		// the sample mixers copy left into right; add the music's right - left
+		for f := range mframes {
+			r := int32(pcm[2*f+1]) + v.mv2.rdiff[f]
+			pcm[2*f+1] = int16(max(-32768, min(32767, r)))
+		}
+	}()
 	if a.fsound == 0 {
 		return
 	}
@@ -427,6 +443,4 @@ func (v *VM) mixSample(i int, c *channel, buf []int16) {
 func (v *VM) sleepUntilMusicStops()       {}
 func (v *VM) sleepUntilMusicStopsAtExit() {}
 func (v *VM) mv1Gomusic()                 {}
-func (v *VM) mv2Gomusic()                 {}
 func (v *VM) mv1Offmusic(arg uint32)      {}
-func (v *VM) mv2Offmusic(arg uint32)      {}

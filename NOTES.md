@@ -57,8 +57,15 @@ equal the C reference log (testdata/*.c.log) frame for frame.
 The C reference converts 4-bit sprites to 8-bit in place at load (ALIS_CONV_INPLACE), so its
 script addresses sit higher than the original's (and the Go port's); the rendered output is the same.
 
-Audio still missing (none of it fires in the scripted sessions or 5 min of play):
-- the mv1/mv2 music players (the `music` opcode is never executed in the sessions seen so far);
+MV2 music (the sample player, internal/alis/music_v2.go) is ported and bit-exact (testdata/play6).
+alis never fills `mv2a.trkval`, so transposed instruments read the struct fields after it; the
+port copies that (`trkvalAt`).
+
+The harnesses keep files the game writes (CONFIG.INF) in `-save` / `ALIS_SAVEDIR`, so runs
+don't leak state into each other through the data directory.
+
+Audio still missing (never seen in play):
+- the mv1 player and the mv2 chip/OPL2 players (RRQ's songs use samples);
 - the OPL2 effect channels (DingZap/Noise/Explode, `runson`): alis renders them with emu8950
   using register settings taken from Ishar 2; ioCanal is a no-op.
 - alis sys_init runs before the platform is known, so sys_timeclock_hz is 50

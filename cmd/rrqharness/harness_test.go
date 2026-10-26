@@ -31,7 +31,7 @@ func TestScriptsMatchReference(t *testing.T) {
 	for _, tc := range []struct {
 		name  string
 		maxMs int
-	}{{"attract", 900000}, {"start", 150000}, {"walk", 120000}, {"play2", 1200000}} {
+	}{{"attract", 900000}, {"start", 150000}, {"walk", 120000}, {"play2", 1200000}, {"play6", 1200000}} {
 		t.Run(tc.name, func(t *testing.T) {
 			td, _ := filepath.Abs(filepath.Join("..", "..", "testdata"))
 			tmp := t.TempDir()
