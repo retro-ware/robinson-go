@@ -32,34 +32,30 @@ func cscaset(v *VM) { v.scrWords(0x34, 3, false) }
 // cscamov moves the camera position at 0x34 (START.EXE 0x42db).
 func cscamov(v *VM) { v.scrWords(0x34, 3, true) }
 
+// cdarkpal sets the darkness colour of n palette entries from first
+// (START.EXE 0x87e8: unsigned first/n, no range check; the port stops at
+// the table's end) and flags darkness unless every word after entry 0 is
+// 0x100 (alis checked only the first 0xb6 words).
 func cdarkpal(v *VM) {
 	var p [5]int16
 	for i := range p {
 		v.readexecOpername()
 		p[i] = int16(v.varD7)
 	}
-	r, g, b, first, n := p[0], p[1], p[2], p[3], p[4]
-	if first >= 0x100 {
-		return
-	}
-	length := first + n
-	if 0xff < length {
-		length = 0x100
-	}
-	for i := int(first); i < int(length); i++ {
+	r, g, b, first, n := p[0], p[1], p[2], int(uint16(p[3])), int(uint16(p[4]))
+	for i := first; i < first+n && i*3+2 < len(v.img.dkpalet); i++ {
 		v.img.dkpalet[i*3+0] = r
 		v.img.dkpalet[i*3+1] = g
 		v.img.dkpalet[i*3+2] = b
 	}
 	v.img.dkpalet[0], v.img.dkpalet[1], v.img.dkpalet[2] = 0, 0, 0
-	// TODO(START.EXE): alis only checks the first 0xb6 entries.
-	for i := 3; i < 0xb6; i++ {
+	v.img.fdarkpal = 0
+	for i := 3; i < 0x300; i++ {
 		if v.img.dkpalet[i] != 0x100 {
 			v.img.fdarkpal = 1
-			return
+			break
 		}
 	}
-	v.img.fdarkpal = 0
 }
 
 func cscdark(v *VM) {

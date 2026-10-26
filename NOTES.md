@@ -29,7 +29,7 @@ every 20 ms.
   renders them for the Sound Blaster.
 - `csend`: queue-full handling; `cmouse`: both buttons; `cfreadv`/`cfwritev`: big-endian words.
 - `cbackstar`: mode byte taken from basemain+1; `ctexmap`: opaque-row scan and y_mask snap;
-  `cdarkpal`: checks only the first 0xb6 entries; `csettime`/`cgettime`: host clock + offset.
+ `csettime`/`cgettime`: host clock + offset.
 - `affiscr`: alis holds `linkidx` (clinking) in a u16, so the `linkidx >= 0` / `< 0` sign tests
   are constant; the original tests the sign (unlinked sprites skip `suitlin1`).
 - `calcfen`: alis aligns the window to 16 px after clamping; the DOS original aligns before.
@@ -88,6 +88,7 @@ Reference bugs found this way (fixed in the reference, the port follows START.EX
   at vram-0x22 (alis: vram+0xffde).
 - `cescape` compares signed 32-bit products (alis: s16); capproach/cescape test only the
   16-bit operand against -1; `csetmouse` takes y from its second operand (alis: stale D6).
+- `cdarkpal`: unsigned first/count, darkness flag from all 0x2fd words after entry 0 (alis: 0xb6).
 - Camera words of the current screen (missing in alis): cscamov/cscaset 0x34 (add/set),
   csczoom 0x3a, cscsun 0x7c (four words); the screen is looked up after the operands.
 - The test opcodes latch the own mirror flag (0x1602e) for monoform; cavtstmov doesn't set it.
