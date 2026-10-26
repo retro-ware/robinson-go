@@ -73,6 +73,17 @@ func (m *Machine) installHooks() error {
 				m.idle()
 			}
 		},
+		// getkey: wait for a key press, then for its release
+		0x2492: func() {
+			if m.D8(0x18b68) == 0 {
+				m.idle()
+			}
+		},
+		0x249f: func() {
+			if m.D8(0x18b68) != 0 {
+				m.idle()
+			}
+		},
 		0x6340: func() {
 			if m.OnDraw != nil {
 				m.OnDraw()
@@ -85,6 +96,23 @@ func (m *Machine) installHooks() error {
 		}
 	}
 	return nil
+}
+
+// Hook runs f before the instruction at addr (a DS offset), ahead of the
+// machine's own hook there. f must not change the machine's state.
+func (m *Machine) Hook(addr uint32, f func()) error {
+	if prev, ok := m.e.onCode[progLin+addr]; ok {
+		return m.e.hookCode(progLin+addr, func() { f(); prev() })
+	}
+	return m.e.hookCode(progLin+addr, f)
+}
+
+// Watch calls f for every write to the DS offsets [from, to) (one range
+// per machine), with the writing instruction's EIP.
+func (m *Machine) Watch(from, to uint32, f func(eip, addr uint32, size int, val uint32)) error {
+	return m.e.hookWrite(ds(from), ds(to), func(addr uint32, size int, val uint32) {
+		f(m.e.reg(rEIP), addr-progLin, size, val)
+	})
 }
 
 func (m *Machine) counted(f func()) func() {

@@ -18,6 +18,7 @@ extern void goHookIntr(uc_engine *uc, uint32_t intno, void *user);
 extern uint32_t goHookIn(uc_engine *uc, uint32_t port, int size, void *user);
 extern void goHookOut(uc_engine *uc, uint32_t port, int size, uint32_t value, void *user);
 extern void goHookCode(uc_engine *uc, uint64_t addr, uint32_t size, void *user);
+extern void goHookWrite(uc_engine *uc, uc_mem_type type, uint64_t addr, int size, int64_t value, void *user);
 extern bool goHookInvalid(uc_engine *uc, uc_mem_type type, uint64_t addr, int size, int64_t value, void *user);
 
 static uc_err hook_intr(uc_engine *uc, uc_hook *h, uintptr_t user) {
@@ -34,6 +35,9 @@ static uc_err hook_code(uc_engine *uc, uc_hook *h, uintptr_t user, uint64_t begi
 }
 static uc_err hook_invalid(uc_engine *uc, uc_hook *h, uintptr_t user) {
 	return uc_hook_add(uc, h, UC_HOOK_MEM_INVALID, goHookInvalid, (void *)user, 1, 0);
+}
+static uc_err hook_write(uc_engine *uc, uc_hook *h, uintptr_t user, uint64_t begin, uint64_t end) {
+	return uc_hook_add(uc, h, UC_HOOK_MEM_WRITE, goHookWrite, (void *)user, begin, end);
 }
 static uc_err flush_tb(uc_engine *uc) { return uc_ctl_flush_tb(uc); }
 static uc_err set_mmr(uc_engine *uc, int reg, uint64_t base, uint32_t limit) {
@@ -95,6 +99,7 @@ type engine struct {
 	onOut     func(port uint16, size int, val uint32)
 	onCode    map[uint32]func()
 	onInvalid func(addr uint64, size int, write bool)
+	onWrite   func(addr uint32, size int, val uint32)
 }
 
 func newEngine() (*engine, error) {
@@ -209,6 +214,19 @@ func goHookCode(uc *C.uc_engine, addr C.uint64_t, size C.uint32_t, user unsafe.P
 	if f := e.onCode[uint32(addr)]; f != nil {
 		f()
 	}
+}
+
+// hookWrite calls f for every write to [from, to).
+func (e *engine) hookWrite(from, to uint32, f func(addr uint32, size int, val uint32)) error {
+	e.onWrite = f
+	var h C.uc_hook
+	return ucCheck(C.hook_write(e.uc, &h, C.uintptr_t(e.handle), C.uint64_t(from), C.uint64_t(to-1)))
+}
+
+//export goHookWrite
+func goHookWrite(uc *C.uc_engine, typ C.uc_mem_type, addr C.uint64_t, size C.int, value C.int64_t, user unsafe.Pointer) {
+	e := cgo.Handle(uintptr(user)).Value().(*engine)
+	e.onWrite(uint32(addr), int(size), uint32(value))
 }
 
 //export goHookInvalid

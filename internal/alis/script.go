@@ -249,19 +249,17 @@ func invdigit(sample []byte) {
 }
 
 // scriptLive creates an entity running prog, linked after the current one
-// (alis script_live).
+// (START.EXE 0xb8ac).
 func (v *VM) scriptLive(prog *scriptData) *scriptLive {
 	newent := uint16(v.dernent)
 	s := &scriptLive{name: prog.name, data: prog}
 	d := prog.dataOrg
-	w5 := v.ru16(d + 0x12)
-	w7 := v.ru16(d + 0x16)
-	vramLength := v.ru16(d + 0x14)
-
+	w5 := v.r16(d + 0x12)
 	prevfin := int32(w5) + int32(v.finent)
-	v.finent += uint32(w7) + uint32(w5) + contextSz
+	v.finent += uint32(int32(w5 + v.r16(d+0x16) + contextSz))
 	s.vaccOff = int16(prevfin - int32(v.finent))
 	s.vramOrg = v.finent
+	vramLength := int32(v.r16(d + 0x14))
 	clear(v.mem[s.vramOrg : s.vramOrg+uint32(vramLength)])
 
 	curent := v.varD5
@@ -271,10 +269,10 @@ func (v *VM) scriptLive(prog *scriptData) *scriptLive {
 	v.w16(o-0x0a, s.vaccOff)
 	v.w16(o-0x1c, s.vaccOff)
 	v.w16(o-0x1e, s.vaccOff)
-	v.w32(o-0x08, int32(prog.dataOrg+uint32(prog.header.codeLocOffset)+2))
+	v.w32(o-0x08, int32(d+2+v.ru32(d+2)&0xffffff))
 	v.wu16(o-0x10, prog.header.id)
-	v.w32(o-0x14, int32(prog.dataOrg))
-	v.w8(o-0x2e, prog.header.unknown01)
+	v.w32(o-0x14, int32(d))
+	v.w8(o-0x2e, v.mem[d+5])
 	v.w8(o-0x02, 1)
 	v.w8(o-0x01, 1)
 	v.w8(o-0x04, 0xff)
@@ -287,18 +285,16 @@ func (v *VM) scriptLive(prog *scriptData) *scriptLive {
 	v.w16(o-0x20, 0)
 	v.w8(o-0x03, 0)
 	v.w8(o-0x25, 0)
-	v.w8(o-0x26, 0xff)
+	v.w8(o-0x26, 0)
+	v.w8(o-0x2a, 0)
 	v.w8(o-0x28, 0)
-	v.w16(o-0x2a, 0)
 	v.w8(o-0x2c, 0)
 	v.w8(o-0x2d, 0)
-	v.w8(o-0x26, 0)
+	v.w8(o-0x2b, 0)
 	v.w8(o-0x2f, 0)
-	v.w8(o-0x30, 0)
-	v.w8(o-0x32, 0)
+	v.w16(o-0x32, 0)
 	v.w16(o-0x34, 0)
-	v.w16(o-0x36, 0)
-	v.w16(o-0x38, 0)
+	v.w8(o-0x30, 0)
 	v.w16(o-0x3a, 0)
 	v.w32(o-0x3e, 0)
 

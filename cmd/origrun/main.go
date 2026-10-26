@@ -14,18 +14,31 @@ import (
 	"image/png"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 
+	"github.com/retro-ware/robinson-go/internal/alis"
 	"github.com/retro-ware/robinson-go/internal/orig"
+	"github.com/retro-ware/robinson-go/internal/script"
+	"github.com/retro-ware/robinson-go/internal/vmstate"
 )
 
 func main() {
-	ms := flag.Float64("ms", 10000, "virtual time limit in ms (0 = none)")
+	ms := flag.Float64("ms", 10000, "virtual time limit in ms after the game timer starts (0 = none)")
 	calls := flag.Bool("calls", false, "log every DOS and extender call")
 	save := flag.String("save", "", "drive C: directory (default: a new temporary one with START.STP)")
 	setup := flag.String("stp", "RBVVSBP1J0M1KQ", "START.STP contents for a new drive C:")
 	pngDir := flag.String("png", "", "write the screen at every -every'th draw to this directory")
 	every := flag.Int("every", 50, "draws between -png frames")
 	frames := flag.String("frames", "", "log tick, screen and palette CRC at every draw (as rrqharness -frames)")
+	input := flag.String("input", "", "input script (as rrqharness -input)")
+	trace := flag.String("trace", "", "comma separated code addresses: log the registers there")
+	peek := flag.String("peek", "", "comma separated data addresses: log their dwords with -trace")
+	watch := flag.String("watch", "", "from,to: log writes to these data addresses")
+	raw := flag.String("raw", "", "write the screen and palette at draw -rawdraw to this file")
+	rawDraw := flag.Int("rawdraw", 0, "draw for -raw")
+	vars := flag.String("vars", "", "write the scripts' state at draw -varsdraw to this file (as rrqharness -vars)")
+	varsDraw := flag.Int("varsdraw", 0, "draw for -vars")
 	flag.Parse()
 
 	if *save == "" {
@@ -44,6 +57,41 @@ func main() {
 	})
 	check(err)
 	defer m.Close()
+	var peeks []uint32
+	for _, a := range strings.Split(*peek, ",") {
+		if a != "" {
+			addr, err := strconv.ParseUint(a, 0, 32)
+			check(err)
+			peeks = append(peeks, uint32(addr))
+		}
+	}
+	for _, a := range strings.Split(*trace, ",") {
+		if a == "" {
+			continue
+		}
+		addr, err := strconv.ParseUint(a, 0, 32)
+		check(err)
+		check(m.Hook(uint32(addr), func() {
+			fmt.Fprintf(os.Stderr, "trace tick %d %s", m.D32(0x16058), m.Regs())
+			for _, p := range peeks {
+				fmt.Fprintf(os.Stderr, " [%#x]=%#x", p, m.D32(p))
+			}
+			fmt.Fprintln(os.Stderr)
+		}))
+	}
+	if *watch != "" {
+		var from, to uint32
+		_, err := fmt.Sscanf(*watch, "%v,%v", &from, &to)
+		check(err)
+		check(m.Watch(from, to, func(eip, addr uint32, size int, val uint32) {
+			fmt.Fprintf(os.Stderr, "write tick %d eip %#x [%#x]=%#x/%d\n", m.D32(0x16058), eip, addr, val, size)
+		}))
+	}
+	if *input != "" {
+		evs, err := script.Read(*input)
+		check(err)
+		queue(m, evs)
+	}
 	draws := 0
 	var fw *bufio.Writer
 	if *frames != "" {
@@ -58,6 +106,15 @@ func main() {
 		if *pngDir != "" && draws%*every == 0 {
 			check(writePNG(filepath.Join(*pngDir, fmt.Sprintf("d%05d_t%07.0f.png", draws, m.Ms())), scr, m.DAC()))
 		}
+		if *raw != "" && draws == *rawDraw {
+			check(os.WriteFile(*raw, append(append([]byte{}, scr...), m.DAC()...), 0o644))
+		}
+		if *vars != "" && draws == *varsDraw {
+			f, err := os.Create(*vars)
+			check(err)
+			vmstate.Scripts(f, m.D8, m.D32(0x15f72))
+			f.Close()
+		}
 		if fw != nil {
 			fmt.Fprintf(fw, "draw %d tick %d ct %d scr %08x pal %08x\n", draws, m.D32(0x16058), m.D8(0x1605e),
 				crc32.ChecksumIEEE(scr), crc32.ChecksumIEEE(m.DAC()))
@@ -67,6 +124,43 @@ func main() {
 	err = m.Run(uint64(*ms * 1193182 / 1000))
 	fmt.Fprintf(os.Stderr, "stopped: err=%v draws=%d config=%#x cdspeed=%d unknown ports=%#x\n",
 		err, draws, m.D16(0x16062), m.D32(0x18abc), m.UnknownPorts())
+}
+
+// queue gives the machine the events of an input script at the times the
+// alis package's clock gives them: the mouse driver's x runs 0..639, keys
+// are their scancode bytes.
+func queue(m *orig.Machine, evs []script.Event) {
+	var buttons, x, y uint16
+	for _, e := range evs {
+		t := (e.Ms*1000*1193182 + 999999) / 1000000
+		switch e.Op {
+		case "key":
+			sc := alis.ScancodeByName(e.A)
+			if sc == 0 {
+				fmt.Fprintf(os.Stderr, "unknown key %s\n", e.A)
+				continue
+			}
+			for _, b := range alis.KeyBytes(sc, e.B != "down") {
+				m.Key(t, b)
+			}
+		case "mouse":
+			nx, _ := strconv.Atoi(e.A)
+			ny, _ := strconv.Atoi(e.B)
+			x, y = uint16(nx*2), uint16(ny)
+			m.Mouse(t, buttons, x, y)
+		case "lb", "rb":
+			bit := uint16(1)
+			if e.Op == "rb" {
+				bit = 2
+			}
+			if e.A == "down" {
+				buttons |= bit
+			} else {
+				buttons &^= bit
+			}
+			m.Mouse(t, buttons, x, y)
+		}
+	}
 }
 
 func writePNG(name string, vram, dac []byte) error {

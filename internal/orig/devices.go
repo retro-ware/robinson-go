@@ -79,9 +79,11 @@ func (m *Machine) int33() {
 type kbd struct {
 	data   uint8
 	portB  uint8
-	events []keyEvent // sorted by time
-	bios   []uint16   // BIOS keyboard buffer: scancode<<8 | ASCII
-	ext    uint16     // scancode still to return after a 0 (extended key)
+	events []keyEvent // sorted by time, relative to base
+	base   uint64     // start of the game timer: input times count from here
+	armed  bool
+	bios   []uint16 // BIOS keyboard buffer: scancode<<8 | ASCII
+	ext    uint16   // scancode still to return after a 0 (extended key)
 }
 
 // US layout ASCII of the unshifted keys the setup prompt reacts to.
@@ -94,36 +96,41 @@ type keyEvent struct {
 	buttons, mx, my uint16
 }
 
-// Key queues a scancode at virtual time t (PIT clocks).
+// Key queues a scancode at time t (PIT clocks after the game timer was
+// started, as the alis package's clock).
 func (m *Machine) Key(t uint64, code uint8) {
 	m.kbd.events = append(m.kbd.events, keyEvent{t: t, code: code})
 	sort.SliceStable(m.kbd.events, func(i, j int) bool { return m.kbd.events[i].t < m.kbd.events[j].t })
 }
 
-// Mouse queues a mouse state (x in 0..639, y in 0..199) at time t.
+// Mouse queues a mouse state (x in 0..639, y in 0..199) at time t (as
+// Key).
 func (m *Machine) Mouse(t uint64, buttons, x, y uint16) {
 	m.kbd.events = append(m.kbd.events, keyEvent{t: t, isMouse: true, buttons: buttons, mx: x, my: y})
 	sort.SliceStable(m.kbd.events, func(i, j int) bool { return m.kbd.events[i].t < m.kbd.events[j].t })
 }
 
 func (k *kbd) next() (uint64, bool) {
-	if len(k.events) == 0 {
+	if len(k.events) == 0 || !k.armed {
 		return 0, false
 	}
-	return k.events[0].t, true
+	return k.base + k.events[0].t, true
 }
+
+// arm starts the input clock at the game timer's start.
+func (k *kbd) arm(t uint64) { k.armed, k.base = true, t }
 
 // run applies the input events due. A scancode waits until the previous
 // one has been taken (IRQ 1 delivered).
 func (k *kbd) run(m *Machine) {
-	for len(k.events) > 0 && k.events[0].t <= m.clk.t {
+	for k.armed && len(k.events) > 0 && k.base+k.events[0].t <= m.clk.t {
 		ev := k.events[0]
 		if ev.isMouse {
 			m.setMouse(ev.buttons, ev.mx, ev.my)
 		} else {
 			if m.pic.irr&2 != 0 || m.pic.isr&2 != 0 {
 				// still busy: retry one tick later
-				k.events[0].t = m.clk.t + 1
+				k.events[0].t = m.clk.t + 1 - k.base
 				return
 			}
 			k.data = ev.code

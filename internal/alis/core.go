@@ -59,6 +59,9 @@ func New(host Host, fs *FileSys) (*VM, error) {
 // Mem is the VM arena (for state comparisons against the C reference).
 func (v *VM) Mem() []byte { return v.mem }
 
+// Atent is the address of the entity table in Mem.
+func (v *VM) Atent() uint32 { return v.atent }
+
 // Err is the error that stopped the VM, if any.
 func (v *VM) Err() error {
 	if v.err == nil {

@@ -17,8 +17,23 @@ const (
 )
 
 type clock struct {
-	t     uint64
-	limit uint64
+	t       uint64
+	limit   uint64 // stop here (0 = none)
+	runFor  uint64 // limit after the game timer starts
+	started bool   // the game timer runs
+}
+
+// gameTimer notes the start of the game timer at t: input and the run
+// limit count from here, as the alis package's clock.
+func (m *Machine) gameTimer(t uint64) {
+	if m.clk.started {
+		return
+	}
+	m.clk.started = true
+	if m.clk.runFor != 0 {
+		m.clk.limit = t + m.clk.runFor
+	}
+	m.kbd.arm(t)
 }
 
 func (c *clock) init() {}
@@ -152,6 +167,9 @@ func (p *pit) load(m *Machine, ch int, c uint16) {
 	p.start[ch] = m.clk.t
 	if ch == 0 {
 		p.next0 = m.clk.t + uint64(d)
+		if d != 65536 {
+			m.gameTimer(m.clk.t)
+		}
 		m.logf("pit: channel 0 divisor %#x mode %d", d, p.mode[0])
 	}
 }

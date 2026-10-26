@@ -23,8 +23,6 @@ type Host interface {
 	Frame(us uint64, argb []uint32, w, h int)
 	// Audio receives interleaved signed 16-bit stereo at 44100 Hz.
 	Audio(samples []int16)
-	// Random is the C library rand() the original seeds from the clock.
-	Random() uint16
 	// Time returns the local wall time of day.
 	Time() (h, m, s int)
 }
@@ -50,15 +48,23 @@ func (in *Input) KeyDown(sc int) { in.key(sc, 0) }
 // KeyUp queues the release of a key.
 func (in *Input) KeyUp(sc int) { in.key(sc, 0x80) }
 
-func (in *Input) key(sc int, up uint8) {
+func (in *Input) key(sc int, up uint8) { in.kb = append(in.kb, KeyBytes(sc, up != 0)...) }
+
+// KeyBytes is what the keyboard controller sends for the press or release
+// of a key (USB HID code): its scancode set 1 byte, after 0xE0 for an
+// extended key; nil for a key a PC keyboard does not have.
+func KeyBytes(sc int, up bool) []uint8 {
 	code, ext := pcScancode(sc)
 	if code == 0 {
-		return
+		return nil
+	}
+	if up {
+		code |= 0x80
 	}
 	if ext {
-		in.kb = append(in.kb, 0xe0)
+		return []uint8{0xe0, code}
 	}
-	in.kb = append(in.kb, code|up)
+	return []uint8{code}
 }
 
 // FileSys gives the VM the game files: reads come from the save directory

@@ -87,28 +87,30 @@ func cdim(v *VM) {
 	offset--
 	v.w8(at(), byte2)
 
+	// the last of the four script bytes is cut to a word in a word table
+	// (START.EXE 0x8515)
 	n := int16(counter & 0xf)
 	if int8(counter) >= 0 {
 		for ; n > 0; n-- {
 			offset -= 2
 			v.w16(at(), v.read16())
 		}
-	} else {
-		for ; n > 0; n-- {
-			offset -= 4
-			v.w32(at(), v.read32())
-		}
+		offset -= 2
+		v.w16(at(), int16(v.read32()))
+		return
+	}
+	for ; n > 0; n-- {
+		offset -= 4
+		v.w32(at(), v.read32())
 	}
 	offset -= 4
 	v.w32(at(), v.read32())
 }
 
+// crandom seeds ornd with the operand, even 0 (START.EXE 0x3ebb).
 func crandom(v *VM) {
 	v.readexecOpername()
 	v.randomNumber = uint16(v.varD7)
-	if v.randomNumber == 0 {
-		v.randomNumber = v.host.Random()
-	}
 }
 
 // readOff24 reads a 24-bit branch offset: on the PC only the low word counts.

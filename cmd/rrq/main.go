@@ -4,7 +4,6 @@ package main
 import (
 	"flag"
 	"log"
-	"math/rand/v2"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -70,7 +69,6 @@ func (h *host) Audio(s []int16) {
 	}
 }
 
-func (h *host) Random() uint16 { return uint16(rand.Uint32()) }
 
 func (h *host) Time() (int, int, int) {
 	t := time.Now()

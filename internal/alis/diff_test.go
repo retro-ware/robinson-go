@@ -26,7 +26,6 @@ func (nullHost) PollInput(uint64, *Input)         {}
 func (nullHost) WaitUntil(uint64)                 {}
 func (nullHost) Frame(uint64, []uint32, int, int) {}
 func (nullHost) Audio([]int16)                    {}
-func (nullHost) Random() uint16                   { return 0 }
 func (nullHost) Time() (int, int, int)            { return 12, 0, 0 }
 
 // pair returns a fresh Go VM and the (process-wide) C VM, both with the game
@@ -358,14 +357,9 @@ func isolate(t *testing.T) {
 // and a stop at maxUs.
 type runHost struct {
 	nullHost
-	rnd   uint32
 	maxUs uint64
 }
 
-func (h *runHost) Random() uint16 {
-	h.rnd = h.rnd*1103515245 + 12345
-	return uint16(h.rnd >> 16 & 0x7fff)
-}
 func (h *runHost) PollInput(us uint64, in *Input) {
 	if us >= h.maxUs {
 		in.Quit = true
@@ -386,7 +380,7 @@ func runPair(t *testing.T, ms uint64) *VM {
 	if err := cref.Init(data); err != nil {
 		t.Fatal(err)
 	}
-	v, err := New(&runHost{rnd: 1, maxUs: ms * 1000}, NewFileSys(data, save))
+	v, err := New(&runHost{maxUs: ms * 1000}, NewFileSys(data, save))
 	if err != nil {
 		t.Fatal(err)
 	}

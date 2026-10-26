@@ -20,15 +20,12 @@ import (
 	"strings"
 
 	"github.com/retro-ware/robinson-go/internal/alis"
+	"github.com/retro-ware/robinson-go/internal/script"
+	"github.com/retro-ware/robinson-go/internal/vmstate"
 )
 
-type event struct {
-	ms       uint64
-	op, a, b string
-}
-
 type host struct {
-	events    []event
+	events    []script.Event
 	evpos     int
 	stop      bool
 	vm        *alis.VM
@@ -42,7 +39,6 @@ type host struct {
 	dumpAt    []uint64
 	sample    uint32
 	lastCRC   uint32
-	rnd       uint32
 	buf       []byte
 	wav       *os.File
 	wavN      uint32
@@ -52,13 +48,13 @@ func (h *host) WallUs() uint64      { return 0 }
 func (h *host) WaitUntil(us uint64) {}
 func (h *host) NextEventUs() (uint64, bool) {
 	if h.evpos < len(h.events) {
-		return h.events[h.evpos].ms * 1000, true
+		return h.events[h.evpos].Ms * 1000, true
 	}
 	return 0, false
 }
 
 func (h *host) PollInput(us uint64, in *alis.Input) {
-	for h.evpos < len(h.events) && h.events[h.evpos].ms*1000 <= us {
+	for h.evpos < len(h.events) && h.events[h.evpos].Ms*1000 <= us {
 		h.apply(h.events[h.evpos], in)
 		h.evpos++
 	}
@@ -67,25 +63,25 @@ func (h *host) PollInput(us uint64, in *alis.Input) {
 	}
 }
 
-func (h *host) apply(e event, in *alis.Input) {
-	switch e.op {
+func (h *host) apply(e script.Event, in *alis.Input) {
+	switch e.Op {
 	case "key":
-		sc := alis.ScancodeByName(e.a)
+		sc := alis.ScancodeByName(e.A)
 		if sc == 0 {
-			log.Printf("unknown key %s", e.a)
+			log.Printf("unknown key %s", e.A)
 			return
 		}
-		if e.b == "down" {
+		if e.B == "down" {
 			in.KeyDown(sc)
 		} else {
 			in.KeyUp(sc)
 		}
 	case "mouse":
-		in.Mouse.X, _ = strconv.Atoi(e.a)
-		in.Mouse.Y, _ = strconv.Atoi(e.b)
+		in.Mouse.X, _ = strconv.Atoi(e.A)
+		in.Mouse.Y, _ = strconv.Atoi(e.B)
 	case "lb", "rb":
-		down := e.a == "down"
-		if e.op == "lb" {
+		down := e.A == "down"
+		if e.Op == "lb" {
 			in.Mouse.LB = down
 		} else {
 			in.Mouse.RB = down
@@ -95,38 +91,6 @@ func (h *host) apply(e event, in *alis.Input) {
 	}
 }
 
-func readEvents(path string) ([]event, error) {
-	f, err := os.Open(path)
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
-	var evs []event
-	sc := bufio.NewScanner(f)
-	for sc.Scan() {
-		line := sc.Text()
-		if line == "" || line[0] == '#' {
-			continue
-		}
-		fs := strings.Fields(line)
-		if len(fs) < 2 {
-			continue
-		}
-		ms, err := strconv.ParseUint(fs[0], 10, 64)
-		if err != nil {
-			continue
-		}
-		e := event{ms: ms, op: fs[1]}
-		if len(fs) > 2 {
-			e.a = fs[2]
-		}
-		if len(fs) > 3 {
-			e.b = fs[3]
-		}
-		evs = append(evs, e)
-	}
-	return evs, sc.Err()
-}
 func (h *host) Audio(s []int16) {
 	if h.wav == nil {
 		return
@@ -156,10 +120,6 @@ func wavHeader(f *os.File, n uint32) {
 	copy(h[36:], "data")
 	binary.LittleEndian.PutUint32(h[40:], n)
 	f.WriteAt(h, 0)
-}
-func (h *host) Random() uint16 {
-	h.rnd = h.rnd*1103515245 + 12345
-	return uint16(h.rnd >> 16 & 0x7fff)
 }
 func (h *host) Time() (int, int, int) { return 12, 0, 0 }
 
@@ -214,9 +174,13 @@ func main() {
 	wav := flag.String("wav", "", "write the mixed audio as WAV (C harness ALIS_WAV)")
 	save := flag.String("save", "", "directory for files the game writes (C harness ALIS_SAVEDIR; default: the data directory)")
 	frames := flag.String("frames", "", "log tick, screen and palette CRC at every draw (as origrun -frames)")
+	raw := flag.String("raw", "", "write the screen and palette at draw -rawdraw to this file (as origrun -raw)")
+	rawDraw := flag.Int("rawdraw", 0, "draw for -raw")
+	vars := flag.String("vars", "", "write the scripts' state at draw -varsdraw to this file (as origrun -vars)")
+	varsDraw := flag.Int("varsdraw", 0, "draw for -vars")
 	flag.Parse()
 
-	h := &host{maxUs: *maxMs * 1000, lastCRC: 0xffffffff, rnd: 1, dumpDir: *dump}
+	h := &host{maxUs: *maxMs * 1000, lastCRC: 0xffffffff, dumpDir: *dump}
 	if *logPath != "" {
 		f, err := os.Create(*logPath)
 		if err != nil {
@@ -255,7 +219,7 @@ func main() {
 		}
 	}
 	if *input != "" {
-		evs, err := readEvents(*input)
+		evs, err := script.Read(*input)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -267,20 +231,37 @@ func main() {
 		log.Fatal(err)
 	}
 	h.vm = vm
+	var fw *bufio.Writer
 	if *frames != "" {
 		f, err := os.Create(*frames)
 		if err != nil {
 			log.Fatal(err)
 		}
-		w := bufio.NewWriter(f)
+		fw = bufio.NewWriter(f)
 		defer f.Close()
-		defer w.Flush()
-		n := 0
-		vm.OnDraw = func() {
-			fmt.Fprintf(w, "draw %d tick %d ct %d scr %08x pal %08x\n", n, vm.Timeclock(), vm.Ctiming(),
-				crc32.ChecksumIEEE(vm.Screen()), crc32.ChecksumIEEE(vm.DAC()))
-			n++
+		defer fw.Flush()
+	}
+	n := 0
+	vm.OnDraw = func() {
+		if *raw != "" && n == *rawDraw {
+			if err := os.WriteFile(*raw, append(append([]byte{}, vm.Screen()...), vm.DAC()...), 0o644); err != nil {
+				log.Fatal(err)
+			}
 		}
+		if *vars != "" && n == *varsDraw {
+			f, err := os.Create(*vars)
+			if err != nil {
+				log.Fatal(err)
+			}
+			mem := vm.Mem()
+			vmstate.Scripts(f, func(a uint32) byte { return mem[a] }, vm.Atent())
+			f.Close()
+		}
+		if fw != nil {
+			fmt.Fprintf(fw, "draw %d tick %d ct %d scr %08x pal %08x\n", n, vm.Timeclock(), vm.Ctiming(),
+				crc32.ChecksumIEEE(vm.Screen()), crc32.ChecksumIEEE(vm.DAC()))
+		}
+		n++
 	}
 	if err := vm.Run(); err != nil {
 		log.Print(err)

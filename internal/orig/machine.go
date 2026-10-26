@@ -173,9 +173,12 @@ func (m *Machine) fail(err error) {
 }
 
 // Run runs until the program exits, a hook fails or limit (virtual PIT
-// clocks, 0 = none) passes.
+// clocks after the game timer started, 0 = none) passes.
 func (m *Machine) Run(limit uint64) error {
-	m.clk.limit = limit
+	m.clk.runFor = limit
+	if m.clk.started && limit != 0 {
+		m.clk.limit = m.kbd.base + limit
+	}
 	done := make(chan struct{})
 	defer close(done)
 	go m.watchdog(done)
