@@ -100,13 +100,40 @@ func (m *mv2State) calculfrq() {
 	}
 }
 
+// tabfrqAt reads mv2a.tabfrq[k]. Portamento can push freqsam past the
+// table; alis then reads the struct fields that follow it (sMV2Audio layout).
+func (m *mv2State) tabfrqAt(k int) uint32 {
+	if k < tabfrqLen {
+		return m.tabfrq[k]
+	}
+	var b [144]byte
+	put := func(o int, x uint16) { b[o], b[o+1] = byte(x), byte(x>>8) }
+	copy(b[2:34], m.defvol[:])
+	for i, x := range m.tail() {
+		put(106+2*i, x)
+	}
+	put(136, uint16(m.frqmod))
+	put(138, uint16(m.frqmod>>16))
+	put(140, m.samples)
+	o := (k - tabfrqLen) * 4
+	if o+4 > len(b) {
+		return 0 // past sMV2Audio: whatever the C build put there
+	}
+	return uint32(b[o]) | uint32(b[o+1])<<8 | uint32(b[o+2])<<16 | uint32(b[o+3])<<24
+}
+
+// tail is the sMV2Audio fields after trkval (prevmufreq .. mutadata), as
+// the overreads above see them; mutadata is mv2_trkfrq_ste[3].data.
+func (m *mv2State) tail() []uint16 {
+	return []uint16{uint16(m.prevmufreq), uint16(m.prevmuvol), m.mutype, 0, m.muchip, m.muopl2,
+		m.muptr, m.mumax, m.mucnt, m.mubufa, m.mubufc, m.muspeed, m.muvolgen, m.mubreak, 2}
+}
+
 // trkvalAt reads mv2a.trkval[i]. alis never fills the table and indexes past
 // it into the following struct fields.
 func (m *mv2State) trkvalAt(i int32) int16 {
-	f := []uint16{uint16(m.prevmufreq), uint16(m.prevmuvol), m.mutype, 0, m.muchip, m.muopl2,
-		m.muptr, m.mumax, m.mucnt, m.mubufa, m.mubufc, m.muspeed, m.muvolgen, m.mubreak, 4}
-	if k := i - 36; k >= 0 && int(k) < len(f) {
-		return int16(f[k])
+	if f := m.tail(); i >= 36 && int(i-36) < len(f) {
+		return int16(f[i-36])
 	}
 	return 0
 }
@@ -340,12 +367,9 @@ func (v *VM) mv2Soundcal(vc *mv2Voice, dst []int16, first bool) {
 	m := &v.mv2
 	var freq uint32
 	if fs := int16(vc.freqsam); fs < 0 {
-		k := int(-int32(fs)) >> 2
-		if k < tabfrqLen {
-			freq = m.tabfrq[k] >> 2
-		}
-	} else if int(fs) < tabfrqLen {
-		freq = m.tabfrq[fs]
+		freq = m.tabfrqAt(int(-int32(fs))>>2) >> 2
+	} else {
+		freq = m.tabfrqAt(int(fs))
 	}
 	startsam1, longsam1 := vc.startsam1, vc.longsam1
 	vol := int16(uint8(uint16(m.fVolume(int16(vc.volsam))) >> 8))
