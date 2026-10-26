@@ -513,4 +513,9 @@ func cpointpix(v *VM) {
 	v.readexecOpername()
 	v.readexecOpernameSaveD6()
 	v.pointpix(int16(v.varD7), int16(v.varD6))
+	img := &v.img
+	for _, r := range [...]int16{img.cxtstpix, img.cytstpix, img.cztstpix, img.dtstpix, img.ntstpix, img.etstpix} {
+		v.varD7 = int32(r)
+		v.cstoreContinue()
+	}
 }

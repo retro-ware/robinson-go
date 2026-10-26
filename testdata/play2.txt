@@ -1,0 +1,1401 @@
+5000 key Escape down
+5100 key Escape up
+10000 key Space down
+10100 key Space up
+15000 key Return down
+15100 key Return up
+40000 mouse 110 140
+40100 lb down
+40200 lb up
+50000 mouse 160 165
+50100 lb down
+50200 lb up
+53000 mouse 28 23
+53100 lb down
+53200 lb up
+54878 mouse 157 64
+54978 lb down
+55078 lb up
+57763 key m down
+58363 key m up
+59345 mouse 260 95
+59445 rb down
+59545 rb up
+61801 key Up down
+61951 key Up up
+62796 key Down down
+66796 key Down up
+67763 mouse 269 42
+67863 lb down
+67963 lb up
+69130 key Up down
+71130 key Up up
+71585 key Escape down
+73585 key Escape up
+74737 mouse 93 114
+74837 rb down
+74937 rb up
+77288 mouse 186 151
+77388 lb down
+77488 lb up
+79170 mouse 228 41
+79270 rb down
+79370 rb up
+81459 mouse 127 125
+81559 lb down
+81659 lb up
+83899 mouse 181 169
+83999 rb down
+84099 rb up
+86187 key i down
+90187 key i up
+91283 mouse 166 179
+91383 lb down
+91483 lb up
+94207 key 3 down
+98207 key 3 up
+98940 key 1 down
+102940 key 1 up
+103678 mouse 250 131
+103778 lb down
+103878 lb up
+106630 mouse 174 185
+106730 lb down
+106830 lb up
+107813 mouse 54 15
+107913 lb down
+108013 lb up
+109331 mouse 54 193
+109431 lb down
+109531 lb up
+110819 key Left down
+110969 key Left up
+111935 mouse 16 14
+112035 lb down
+112135 lb up
+113810 key m down
+113960 key m up
+114229 key Up down
+114379 key Up up
+114562 mouse 10 95
+114662 lb down
+114762 lb up
+115485 mouse 80 188
+115585 lb down
+115685 lb up
+118027 mouse 197 150
+118127 lb down
+118227 lb up
+119442 key Up down
+119592 key Up up
+120396 mouse 57 73
+120496 lb down
+120596 lb up
+122797 key Return down
+122947 key Return up
+123587 mouse 318 180
+123687 lb down
+123787 lb up
+125923 mouse 47 169
+126023 lb down
+126123 lb up
+126740 key 1 down
+127340 key 1 up
+128501 mouse 201 124
+128601 lb down
+128701 lb up
+129490 mouse 174 66
+129590 lb down
+129690 lb up
+132372 mouse 9 179
+132472 lb down
+132572 lb up
+133004 key Up down
+133604 key Up up
+134053 key m down
+134653 key m up
+135793 mouse 16 63
+135893 lb down
+135993 lb up
+138014 key Up down
+138614 key Up up
+139992 mouse 319 181
+140092 lb down
+140192 lb up
+141443 mouse 142 134
+141543 lb down
+141643 lb up
+142461 key Space down
+143061 key Space up
+143388 mouse 44 61
+143488 lb down
+143588 lb up
+144196 key 1 down
+144796 key 1 up
+145111 key Escape down
+149111 key Escape up
+150140 key m down
+154140 key m up
+154675 mouse 107 186
+154775 rb down
+154875 rb up
+156818 mouse 297 151
+156918 lb down
+157018 lb up
+158930 mouse 297 46
+159030 lb down
+159130 lb up
+161295 key Escape down
+161445 key Escape up
+162795 key i down
+164795 key i up
+165526 key m down
+169526 key m up
+169833 key Left down
+169983 key Left up
+171007 key m down
+175007 key m up
+176055 key Tab down
+176205 key Tab up
+176315 key Down down
+178315 key Down up
+178571 key Return down
+179171 key Return up
+179508 mouse 200 183
+179608 rb down
+179708 rb up
+180480 mouse 202 31
+180580 lb down
+180680 lb up
+181378 key Tab down
+183378 key Tab up
+184790 key Left down
+184940 key Left up
+185090 mouse 240 198
+185190 lb down
+185290 lb up
+187529 key Return down
+188129 key Return up
+188996 key Escape down
+192996 key Escape up
+193954 mouse 151 101
+194054 lb down
+194154 lb up
+194994 key Right down
+198994 key Right up
+200484 mouse 43 149
+200584 lb down
+200684 lb up
+201175 key Escape down
+201775 key Escape up
+202728 mouse 44 174
+202828 lb down
+202928 lb up
+203654 mouse 199 59
+203754 lb down
+203854 lb up
+205851 key Right down
+206001 key Right up
+206420 mouse 216 24
+206520 lb down
+206620 lb up
+208935 key Escape down
+210935 key Escape up
+211382 mouse 236 180
+211482 lb down
+211582 lb up
+213437 mouse 183 195
+213537 lb down
+213637 lb up
+215748 key Up down
+219748 key Up up
+220217 key Up down
+224217 key Up up
+224878 key i down
+228878 key i up
+230304 key Escape down
+232304 key Escape up
+233752 key 2 down
+234352 key 2 up
+235543 mouse 206 170
+235643 rb down
+235743 rb up
+238543 mouse 160 118
+238643 rb down
+238743 rb up
+239669 mouse 8 103
+239769 lb down
+239869 lb up
+242400 mouse 110 25
+242500 rb down
+242600 rb up
+245084 mouse 102 70
+245184 lb down
+245284 lb up
+247490 mouse 70 2
+247590 rb down
+247690 rb up
+249864 key Tab down
+250464 key Tab up
+251520 mouse 37 89
+251620 lb down
+251720 lb up
+253908 mouse 33 193
+254008 rb down
+254108 rb up
+255679 key 3 down
+259679 key 3 up
+259835 mouse 314 193
+259935 lb down
+260035 lb up
+260946 mouse 207 65
+261046 lb down
+261146 lb up
+261567 key Space down
+265567 key Space up
+267050 key Up down
+269050 key Up up
+270291 key Up down
+272291 key Up up
+272460 mouse 195 144
+272560 rb down
+272660 rb up
+273697 mouse 157 127
+273797 lb down
+273897 lb up
+276078 mouse 154 19
+276178 lb down
+276278 lb up
+277760 key m down
+279760 key m up
+281198 mouse 265 23
+281298 lb down
+281398 lb up
+283200 mouse 76 129
+283300 lb down
+283400 lb up
+284861 key Return down
+285461 key Return up
+286631 key Up down
+286781 key Up up
+288264 mouse 194 93
+288364 lb down
+288464 lb up
+289968 key Down down
+293968 key Down up
+294810 key Return down
+296810 key Return up
+297854 mouse 226 163
+297954 lb down
+298054 lb up
+299372 key Up down
+299972 key Up up
+301032 key m down
+303032 key m up
+303511 key 1 down
+304111 key 1 up
+304688 key Escape down
+308688 key Escape up
+309607 mouse 175 71
+309707 lb down
+309807 lb up
+311643 mouse 149 136
+311743 lb down
+311843 lb up
+313548 key Return down
+314148 key Return up
+314776 mouse 181 112
+314876 rb down
+314976 rb up
+315535 mouse 95 80
+315635 rb down
+315735 rb up
+316455 mouse 53 89
+316555 lb down
+316655 lb up
+318326 key 3 down
+322326 key 3 up
+322443 mouse 121 152
+322543 rb down
+322643 rb up
+325059 key m down
+325659 key m up
+326495 key 3 down
+330495 key 3 up
+330789 mouse 104 84
+330889 lb down
+330989 lb up
+331768 key Right down
+331918 key Right up
+332719 key i down
+333319 key i up
+334669 key Down down
+334819 key Down up
+335213 key Up down
+339213 key Up up
+340221 mouse 67 82
+340321 lb down
+340421 lb up
+342005 mouse 312 101
+342105 lb down
+342205 lb up
+342626 key Return down
+346626 key Return up
+347994 mouse 278 159
+348094 lb down
+348194 lb up
+350802 mouse 253 102
+350902 rb down
+351002 rb up
+351895 key Escape down
+355895 key Escape up
+356089 mouse 231 151
+356189 lb down
+356289 lb up
+356974 mouse 256 44
+357074 lb down
+357174 lb up
+358982 key 1 down
+359132 key 1 up
+359750 key Down down
+360350 key Down up
+360804 key Space down
+360954 key Space up
+361742 mouse 238 12
+361842 rb down
+361942 rb up
+363131 key Up down
+363281 key Up up
+363664 mouse 277 15
+363764 lb down
+363864 lb up
+364881 mouse 3 133
+364981 lb down
+365081 lb up
+367445 mouse 71 95
+367545 rb down
+367645 rb up
+367851 key Up down
+368451 key Up up
+368772 key 1 down
+368922 key 1 up
+370283 key Space down
+372283 key Space up
+373658 mouse 201 183
+373758 lb down
+373858 lb up
+376150 key 2 down
+376750 key 2 up
+378134 mouse 88 96
+378234 lb down
+378334 lb up
+379752 key Up down
+383752 key Up up
+384119 key 1 down
+386119 key 1 up
+386422 mouse 242 69
+386522 lb down
+386622 lb up
+388982 mouse 143 58
+389082 rb down
+389182 rb up
+389945 mouse 53 7
+390045 lb down
+390145 lb up
+391214 key Tab down
+391364 key Tab up
+392785 key Up down
+394785 key Up up
+395858 mouse 114 36
+395958 lb down
+396058 lb up
+396414 mouse 55 35
+396514 lb down
+396614 lb up
+397191 mouse 237 161
+397291 lb down
+397391 lb up
+398446 key Down down
+400446 key Down up
+401607 mouse 211 106
+401707 lb down
+401807 lb up
+403872 key 2 down
+404022 key 2 up
+405425 mouse 139 4
+405525 lb down
+405625 lb up
+407539 key Escape down
+411539 key Escape up
+412854 mouse 102 110
+412954 lb down
+413054 lb up
+413953 mouse 229 116
+414053 lb down
+414153 lb up
+415921 key Right down
+416521 key Right up
+417810 key Left down
+421810 key Left up
+423084 key Up down
+423684 key Up up
+424540 mouse 241 56
+424640 lb down
+424740 lb up
+426200 mouse 274 76
+426300 lb down
+426400 lb up
+426651 mouse 14 50
+426751 lb down
+426851 lb up
+427290 key Right down
+429290 key Right up
+430292 key Return down
+430442 key Return up
+431120 mouse 67 54
+431220 lb down
+431320 lb up
+432184 mouse 192 184
+432284 lb down
+432384 lb up
+435177 mouse 142 165
+435277 lb down
+435377 lb up
+437606 key 1 down
+438206 key 1 up
+438615 mouse 116 51
+438715 lb down
+438815 lb up
+441437 mouse 200 134
+441537 rb down
+441637 rb up
+442798 mouse 287 15
+442898 lb down
+442998 lb up
+444219 key Tab down
+448219 key Tab up
+449212 key Return down
+453212 key Return up
+454120 key Space down
+456120 key Space up
+456660 key Up down
+456810 key Up up
+458144 mouse 1 13
+458244 rb down
+458344 rb up
+460307 key Escape down
+462307 key Escape up
+462613 key Down down
+466613 key Down up
+467902 key Return down
+468502 key Return up
+469174 key Return down
+469324 key Return up
+469688 mouse 105 82
+469788 lb down
+469888 lb up
+472290 key Up down
+474290 key Up up
+474599 mouse 276 22
+474699 lb down
+474799 lb up
+476790 mouse 17 79
+476890 lb down
+476990 lb up
+479128 key Escape down
+481128 key Escape up
+481924 mouse 49 155
+482024 lb down
+482124 lb up
+482762 mouse 178 93
+482862 lb down
+482962 lb up
+485120 mouse 260 153
+485220 lb down
+485320 lb up
+485624 key Space down
+485774 key Space up
+486589 mouse 273 183
+486689 lb down
+486789 lb up
+487303 mouse 259 156
+487403 rb down
+487503 rb up
+489458 key 1 down
+490058 key 1 up
+490490 mouse 8 151
+490590 lb down
+490690 lb up
+491633 key 3 down
+491783 key 3 up
+492388 mouse 112 103
+492488 lb down
+492588 lb up
+494263 key Tab down
+494413 key Tab up
+495009 key Left down
+495159 key Left up
+495271 mouse 40 128
+495371 lb down
+495471 lb up
+498054 mouse 26 134
+498154 rb down
+498254 rb up
+500203 mouse 64 39
+500303 rb down
+500403 rb up
+501133 key Down down
+501283 key Down up
+502554 key 2 down
+506554 key 2 up
+507549 mouse 228 41
+507649 rb down
+507749 rb up
+510384 mouse 179 37
+510484 lb down
+510584 lb up
+511813 mouse 77 163
+511913 rb down
+512013 rb up
+514546 mouse 226 120
+514646 rb down
+514746 rb up
+515716 key Right down
+516316 key Right up
+517139 mouse 16 101
+517239 lb down
+517339 lb up
+519286 key 2 down
+519436 key 2 up
+520657 key Right down
+522657 key Right up
+523263 key Return down
+525263 key Return up
+526431 mouse 236 169
+526531 lb down
+526631 lb up
+529108 mouse 81 117
+529208 lb down
+529308 lb up
+530989 key Escape down
+531589 key Escape up
+533026 mouse 198 29
+533126 rb down
+533226 rb up
+535875 key Escape down
+539875 key Escape up
+540159 mouse 199 115
+540259 lb down
+540359 lb up
+542840 key Up down
+543440 key Up up
+544901 mouse 89 104
+545001 rb down
+545101 rb up
+547344 mouse 88 104
+547444 lb down
+547544 lb up
+549024 mouse 207 76
+549124 lb down
+549224 lb up
+550708 mouse 205 151
+550808 lb down
+550908 lb up
+551952 key Up down
+552102 key Up up
+552944 key Down down
+556944 key Down up
+557409 mouse 166 20
+557509 rb down
+557609 rb up
+559456 mouse 120 113
+559556 lb down
+559656 lb up
+562326 key Up down
+564326 key Up up
+565436 key i down
+565586 key i up
+565705 key Return down
+565855 key Return up
+566942 mouse 294 52
+567042 lb down
+567142 lb up
+569849 key Down down
+571849 key Down up
+572750 mouse 248 119
+572850 lb down
+572950 lb up
+573501 mouse 293 93
+573601 lb down
+573701 lb up
+575382 mouse 92 61
+575482 lb down
+575582 lb up
+576640 mouse 121 101
+576740 lb down
+576840 lb up
+579446 key 2 down
+580046 key 2 up
+580149 key Return down
+582149 key Return up
+583578 key Left down
+584178 key Left up
+585270 mouse 68 53
+585370 lb down
+585470 lb up
+585675 mouse 233 199
+585775 lb down
+585875 lb up
+586832 key Tab down
+586982 key Tab up
+587103 key Up down
+589103 key Up up
+589276 mouse 241 97
+589376 lb down
+589476 lb up
+589987 mouse 90 36
+590087 rb down
+590187 rb up
+590644 key 2 down
+594644 key 2 up
+595845 key 1 down
+597845 key 1 up
+598531 mouse 280 143
+598631 lb down
+598731 lb up
+599249 key Up down
+599849 key Up up
+601150 key 3 down
+601750 key 3 up
+601930 mouse 235 15
+602030 lb down
+602130 lb up
+603265 mouse 179 162
+603365 lb down
+603465 lb up
+604107 mouse 79 56
+604207 lb down
+604307 lb up
+605830 key Up down
+607830 key Up up
+608076 mouse 314 34
+608176 lb down
+608276 lb up
+609013 mouse 100 79
+609113 lb down
+609213 lb up
+609484 key Up down
+609634 key Up up
+610848 mouse 70 188
+610948 rb down
+611048 rb up
+612956 mouse 246 169
+613056 lb down
+613156 lb up
+614572 key m down
+615172 key m up
+615507 key Up down
+616107 key Up up
+616928 mouse 79 76
+617028 lb down
+617128 lb up
+617693 mouse 117 146
+617793 lb down
+617893 lb up
+619464 mouse 95 170
+619564 rb down
+619664 rb up
+620724 key m down
+620874 key m up
+621658 key Return down
+623658 key Return up
+624136 mouse 60 168
+624236 lb down
+624336 lb up
+625049 mouse 193 37
+625149 rb down
+625249 rb up
+626362 mouse 315 138
+626462 lb down
+626562 lb up
+627114 mouse 292 184
+627214 lb down
+627314 lb up
+628328 mouse 318 172
+628428 lb down
+628528 lb up
+630928 mouse 66 128
+631028 lb down
+631128 lb up
+632301 mouse 207 116
+632401 lb down
+632501 lb up
+633985 key Down down
+634135 key Down up
+635041 key Up down
+637041 key Up up
+637864 mouse 172 108
+637964 lb down
+638064 lb up
+638442 key Up down
+639042 key Up up
+639944 key Up down
+641944 key Up up
+642916 key Up down
+646916 key Up up
+647019 mouse 16 48
+647119 rb down
+647219 rb up
+647426 key 2 down
+651426 key 2 up
+652168 mouse 89 68
+652268 lb down
+652368 lb up
+653620 mouse 264 79
+653720 lb down
+653820 lb up
+656326 key Return down
+660326 key Return up
+661029 mouse 88 167
+661129 rb down
+661229 rb up
+662635 mouse 235 134
+662735 rb down
+662835 rb up
+665389 mouse 276 18
+665489 lb down
+665589 lb up
+666835 mouse 298 117
+666935 lb down
+667035 lb up
+669289 mouse 268 163
+669389 lb down
+669489 lb up
+670334 mouse 189 27
+670434 lb down
+670534 lb up
+671598 key Escape down
+672198 key Escape up
+673337 key 2 down
+673937 key 2 up
+674181 key Return down
+674781 key Return up
+675936 key Down down
+676536 key Down up
+677086 mouse 283 10
+677186 rb down
+677286 rb up
+679787 key Space down
+681787 key Space up
+682363 mouse 204 56
+682463 lb down
+682563 lb up
+685114 mouse 117 128
+685214 lb down
+685314 lb up
+687772 key Right down
+688372 key Right up
+688524 mouse 204 131
+688624 lb down
+688724 lb up
+689152 mouse 99 141
+689252 lb down
+689352 lb up
+690750 mouse 23 119
+690850 lb down
+690950 lb up
+691904 key Left down
+693904 key Left up
+694531 mouse 227 67
+694631 lb down
+694731 lb up
+695125 mouse 5 106
+695225 lb down
+695325 lb up
+696276 key m down
+700276 key m up
+700651 key Right down
+700801 key Right up
+702246 mouse 27 107
+702346 lb down
+702446 lb up
+704823 mouse 10 7
+704923 lb down
+705023 lb up
+706099 mouse 289 194
+706199 rb down
+706299 rb up
+708263 mouse 313 176
+708363 lb down
+708463 lb up
+709085 mouse 39 52
+709185 lb down
+709285 lb up
+711655 mouse 269 7
+711755 lb down
+711855 lb up
+712172 key Up down
+712322 key Up up
+713739 mouse 179 70
+713839 lb down
+713939 lb up
+715724 mouse 95 105
+715824 lb down
+715924 lb up
+717092 key Up down
+721092 key Up up
+722305 mouse 294 70
+722405 lb down
+722505 lb up
+723686 mouse 24 55
+723786 lb down
+723886 lb up
+724806 mouse 0 43
+724906 lb down
+725006 lb up
+727594 key Left down
+729594 key Left up
+730370 mouse 105 162
+730470 lb down
+730570 lb up
+733104 mouse 127 27
+733204 lb down
+733304 lb up
+735518 mouse 107 54
+735618 rb down
+735718 rb up
+737080 key Left down
+739080 key Left up
+740517 key Escape down
+742517 key Escape up
+743974 key Right down
+744124 key Right up
+745196 mouse 71 155
+745296 lb down
+745396 lb up
+746771 mouse 319 108
+746871 rb down
+746971 rb up
+747577 mouse 95 165
+747677 lb down
+747777 lb up
+750533 mouse 33 118
+750633 lb down
+750733 lb up
+753419 key Up down
+754019 key Up up
+754888 key Down down
+755488 key Down up
+756474 mouse 53 86
+756574 lb down
+756674 lb up
+758137 key Left down
+760137 key Left up
+761201 mouse 0 186
+761301 lb down
+761401 lb up
+761631 key Right down
+761781 key Right up
+762786 mouse 114 52
+762886 lb down
+762986 lb up
+763501 key Up down
+767501 key Up up
+767829 key 3 down
+771829 key 3 up
+773212 mouse 12 192
+773312 lb down
+773412 lb up
+774320 key 2 down
+774920 key 2 up
+775483 key i down
+777483 key i up
+778646 mouse 137 29
+778746 lb down
+778846 lb up
+781488 key i down
+781638 key i up
+782099 mouse 15 1
+782199 lb down
+782299 lb up
+784383 key m down
+784533 key m up
+785098 mouse 169 172
+785198 lb down
+785298 lb up
+786482 mouse 142 194
+786582 lb down
+786682 lb up
+787570 mouse 43 108
+787670 lb down
+787770 lb up
+790001 mouse 139 152
+790101 lb down
+790201 lb up
+791727 key Tab down
+792327 key Tab up
+792831 mouse 226 28
+792931 rb down
+793031 rb up
+794839 mouse 163 182
+794939 lb down
+795039 lb up
+797120 key Return down
+797720 key Return up
+798952 key m down
+799102 key m up
+800552 mouse 206 68
+800652 lb down
+800752 lb up
+802798 key i down
+806798 key i up
+807388 mouse 84 176
+807488 lb down
+807588 lb up
+808272 mouse 141 137
+808372 lb down
+808472 lb up
+810268 mouse 298 187
+810368 lb down
+810468 lb up
+811225 mouse 22 15
+811325 lb down
+811425 lb up
+811778 mouse 130 137
+811878 lb down
+811978 lb up
+812821 key Down down
+812971 key Down up
+813958 mouse 312 41
+814058 lb down
+814158 lb up
+816069 key Up down
+816669 key Up up
+817314 key Left down
+817914 key Left up
+819001 mouse 251 115
+819101 lb down
+819201 lb up
+819558 key 2 down
+820158 key 2 up
+821127 key Return down
+821727 key Return up
+822969 key Tab down
+823569 key Tab up
+824785 mouse 264 47
+824885 lb down
+824985 lb up
+826554 mouse 27 156
+826654 lb down
+826754 lb up
+829525 mouse 165 153
+829625 lb down
+829725 lb up
+830200 mouse 72 149
+830300 lb down
+830400 lb up
+831917 key 1 down
+832517 key 1 up
+833836 key Down down
+833986 key Down up
+834113 mouse 248 101
+834213 lb down
+834313 lb up
+834709 mouse 213 17
+834809 lb down
+834909 lb up
+835780 mouse 125 26
+835880 lb down
+835980 lb up
+837212 key i down
+839212 key i up
+840265 mouse 108 84
+840365 lb down
+840465 lb up
+843180 mouse 307 189
+843280 lb down
+843380 lb up
+845251 mouse 215 156
+845351 rb down
+845451 rb up
+847958 key 1 down
+848108 key 1 up
+848728 key Up down
+850728 key Up up
+851270 key 2 down
+851420 key 2 up
+852648 key 3 down
+854648 key 3 up
+854849 key m down
+856849 key m up
+857318 mouse 74 65
+857418 lb down
+857518 lb up
+859725 mouse 274 67
+859825 lb down
+859925 lb up
+862443 key 1 down
+866443 key 1 up
+867428 mouse 42 101
+867528 lb down
+867628 lb up
+869967 key Down down
+873967 key Down up
+875057 mouse 297 20
+875157 rb down
+875257 rb up
+877102 key 2 down
+879102 key 2 up
+880191 key Return down
+882191 key Return up
+883583 key i down
+884183 key i up
+885524 mouse 4 44
+885624 lb down
+885724 lb up
+886031 key Up down
+890031 key Up up
+890770 key Left down
+894770 key Left up
+895906 key Space down
+899906 key Space up
+900560 key Up down
+902560 key Up up
+902674 key Left down
+903274 key Left up
+904041 mouse 291 48
+904141 lb down
+904241 lb up
+906034 mouse 11 12
+906134 lb down
+906234 lb up
+907451 key Up down
+911451 key Up up
+912186 key Left down
+916186 key Left up
+916350 mouse 215 105
+916450 lb down
+916550 lb up
+917038 key Up down
+921038 key Up up
+921958 key Right down
+922558 key Right up
+923532 key m down
+927532 key m up
+928934 key m down
+932934 key m up
+933805 key Escape down
+935805 key Escape up
+936515 key Tab down
+940515 key Tab up
+940717 key 2 down
+941317 key 2 up
+941767 key 1 down
+942367 key 1 up
+943808 key m down
+943958 key m up
+944268 mouse 271 115
+944368 lb down
+944468 lb up
+946741 mouse 96 58
+946841 lb down
+946941 lb up
+948376 mouse 245 116
+948476 lb down
+948576 lb up
+949928 mouse 233 113
+950028 lb down
+950128 lb up
+952056 mouse 204 46
+952156 lb down
+952256 lb up
+954899 key Space down
+956899 key Space up
+957908 key Right down
+959908 key Right up
+961321 key 3 down
+961471 key 3 up
+961898 mouse 267 144
+961998 lb down
+962098 lb up
+964687 mouse 173 138
+964787 lb down
+964887 lb up
+966198 mouse 158 148
+966298 lb down
+966398 lb up
+968962 key m down
+972962 key m up
+973077 mouse 102 2
+973177 lb down
+973277 lb up
+975742 mouse 86 101
+975842 lb down
+975942 lb up
+978595 mouse 153 106
+978695 lb down
+978795 lb up
+979631 mouse 4 175
+979731 rb down
+979831 rb up
+980112 key i down
+980712 key i up
+981185 key Up down
+985185 key Up up
+985717 key Up down
+987717 key Up up
+987922 key Space down
+988072 key Space up
+988364 key Space down
+988964 key Space up
+989926 mouse 125 123
+990026 lb down
+990126 lb up
+990622 key Escape down
+990772 key Escape up
+991621 mouse 99 55
+991721 lb down
+991821 lb up
+993971 key Right down
+994571 key Right up
+995586 mouse 258 70
+995686 lb down
+995786 lb up
+996096 mouse 75 84
+996196 lb down
+996296 lb up
+997459 mouse 124 195
+997559 rb down
+997659 rb up
+999636 key m down
+1001636 key m up
+1003088 key Escape down
+1007088 key Escape up
+1007475 mouse 169 132
+1007575 lb down
+1007675 lb up
+1008484 mouse 207 152
+1008584 lb down
+1008684 lb up
+1009032 mouse 252 98
+1009132 lb down
+1009232 lb up
+1009786 key Return down
+1009936 key Return up
+1011393 key Left down
+1013393 key Left up
+1014298 key m down
+1016298 key m up
+1017621 key m down
+1021621 key m up
+1022922 mouse 215 179
+1023022 lb down
+1023122 lb up
+1025491 mouse 97 189
+1025591 lb down
+1025691 lb up
+1026755 key Up down
+1030755 key Up up
+1031007 key 2 down
+1035007 key 2 up
+1035459 key Up down
+1035609 key Up up
+1035757 key Tab down
+1036357 key Tab up
+1036838 mouse 153 197
+1036938 lb down
+1037038 lb up
+1037658 key Left down
+1038258 key Left up
+1038758 key Up down
+1039358 key Up up
+1040146 key i down
+1040746 key i up
+1041529 mouse 268 183
+1041629 lb down
+1041729 lb up
+1042922 key Left down
+1043522 key Left up
+1044518 key Escape down
+1048518 key Escape up
+1049238 mouse 266 8
+1049338 lb down
+1049438 lb up
+1051981 key Down down
+1052131 key Down up
+1053212 mouse 9 193
+1053312 rb down
+1053412 rb up
+1054098 key Down down
+1058098 key Down up
+1058409 key 1 down
+1058559 key 1 up
+1059894 mouse 273 57
+1059994 lb down
+1060094 lb up
+1060398 key 1 down
+1062398 key 1 up
+1063756 key Return down
+1065756 key Return up
+1066127 mouse 151 149
+1066227 rb down
+1066327 rb up
+1067787 mouse 48 5
+1067887 rb down
+1067987 rb up
+1068678 key Right down
+1068828 key Right up
+1069350 mouse 77 91
+1069450 lb down
+1069550 lb up
+1070327 key Tab down
+1070477 key Tab up
+1070706 key 1 down
+1071306 key 1 up
+1071419 mouse 147 151
+1071519 lb down
+1071619 lb up
+1071947 key 2 down
+1072097 key 2 up
+1072830 key Return down
+1073430 key Return up
+1074725 key 2 down
+1075325 key 2 up
+1076245 mouse 173 47
+1076345 rb down
+1076445 rb up
+1078052 key 3 down
+1080052 key 3 up
+1080577 key Down down
+1084577 key Down up
+1085800 key Up down
+1087800 key Up up
+1088640 key Return down
+1088790 key Return up
+1089186 mouse 180 180
+1089286 lb down
+1089386 lb up
+1090694 key Right down
+1091294 key Right up
+1092753 mouse 213 32
+1092853 rb down
+1092953 rb up
+1094732 mouse 62 131
+1094832 lb down
+1094932 lb up
+1096803 key Right down
+1098803 key Right up
+1099916 key Space down
+1101916 key Space up
+1102156 key 1 down
+1106156 key 1 up
+1106540 key m down
+1106690 key m up
+1107628 mouse 134 133
+1107728 rb down
+1107828 rb up
+1108117 mouse 16 35
+1108217 lb down
+1108317 lb up
+1108562 key i down
+1112562 key i up
+1112697 key i down
+1113297 key i up
+1114704 mouse 32 180
+1114804 lb down
+1114904 lb up
+1117530 mouse 76 52
+1117630 rb down
+1117730 rb up
+1118824 mouse 147 123
+1118924 lb down
+1119024 lb up
+1119844 key Left down
+1121844 key Left up
+1122501 mouse 25 144
+1122601 lb down
+1122701 lb up
+1125040 key Return down
+1125190 key Return up
+1125999 mouse 177 56
+1126099 lb down
+1126199 lb up
+1126457 key Space down
+1126607 key Space up
+1127954 mouse 122 114
+1128054 lb down
+1128154 lb up
+1130210 key 3 down
+1134210 key 3 up
+1134991 key Down down
+1136991 key Down up
+1138309 key Up down
+1142309 key Up up
+1143034 key m down
+1145034 key m up
+1146166 mouse 285 107
+1146266 lb down
+1146366 lb up
+1147258 key 3 down
+1147858 key 3 up
+1148581 mouse 187 143
+1148681 rb down
+1148781 rb up
+1149247 mouse 134 175
+1149347 rb down
+1149447 rb up
+1150823 key Escape down
+1152823 key Escape up
+1153535 key Tab down
+1153685 key Tab up
+1155017 key m down
+1155167 key m up
+1155321 mouse 213 160
+1155421 lb down
+1155521 lb up
+1157040 key Return down
+1159040 key Return up
+1160092 key Down down
+1164092 key Down up
+1164873 key Escape down
+1168873 key Escape up
+1169468 key 2 down
+1170068 key 2 up
+1171501 mouse 228 175
+1171601 lb down
+1171701 lb up
+1172352 mouse 273 38
+1172452 rb down
+1172552 rb up
+1175124 key Tab down
+1179124 key Tab up
+1179886 mouse 198 106
+1179986 lb down
+1180086 lb up
+1180526 key Left down
+1182526 key Left up
+1183228 mouse 23 84
+1183328 lb down
+1183428 lb up
+1185152 mouse 150 176
+1185252 rb down
+1185352 rb up
+1187300 key 1 down
+1187450 key 1 up
+1188869 mouse 288 114
+1188969 lb down
+1189069 lb up
+1190059 key Return down
+1190209 key Return up
+1190503 mouse 222 77
+1190603 rb down
+1190703 rb up
+1192230 key Left down
+1196230 key Left up
+1196503 mouse 99 3
+1196603 rb down
+1196703 rb up
+1197258 key Up down
+1197408 key Up up
+1198223 key Return down
+1202223 key Return up

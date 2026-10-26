@@ -47,6 +47,7 @@ type fliChunk struct {
 
 type fliQueue struct {
 	chunks     [fliQueueSize]fliChunk
+	slots      [fliQueueSize * fliChunkMax]byte // alis fli_audio_copybuf, reused in place
 	head, tail uint8
 	played     uint32
 }
@@ -94,7 +95,9 @@ func (v *VM) fliAudioPush(src []byte, freq int16) int {
 		if next == q.tail {
 			break
 		}
-		q.chunks[q.head] = fliChunk{append([]byte(nil), left[:piece]...), freq}
+		slot := q.slots[int(q.head)*fliChunkMax:]
+		copy(slot, left[:piece])
+		q.chunks[q.head] = fliChunk{slot[:piece], freq}
 		q.head = next
 		left = left[piece:]
 	}
@@ -256,7 +259,10 @@ func hermite4(x0, x1, x2, x3, t float32) float32 {
 	return ((c3*t+c2)*t+c1)*t + c0
 }
 
+// smp reads like alis: past the sample's end into whatever memory follows
+// it (the VM arena, or the tail of a reused FLI chunk slot).
 func smp(d []byte, i int) int32 {
+	d = d[:cap(d)]
 	if i < 0 || i >= len(d) {
 		return 0
 	}
