@@ -61,6 +61,15 @@ MV2 music (the sample player, internal/alis/music_v2.go) is ported and bit-exact
 alis never fills `mv2a.trkval`, so transposed instruments read the struct fields after it; the
 port copies that (`trkvalAt`).
 
+State check: `rrqharness -memlog f -memevery n` and the C harness `ALIS_MEMLOG`/`ALIS_MEMLOG_EVERY`
+log a CRC of the whole 4 MB arena; `-memdump`/`ALIS_MEMDUMP(_AT)` dump it. Compare against
+`alis_noconv` (the reference built with ALIS_CONV_INPLACE=0, whose arena layout equals the port's).
+All testdata sessions have identical arenas. The reference patches (harness, traces, fixes) are in
+tools/alis-ref.patch, applied to maestun/alis.
+
+Reference bugs found this way (fixed in the reference, the port follows START.EXE):
+- barland hit test: alis sign-extends the cell type byte into `ntstpix`; START.EXE zero-extends it.
+
 The harnesses keep files the game writes (CONFIG.INF) in `-save` / `ALIS_SAVEDIR`, so runs
 don't leak state into each other through the data directory.
 

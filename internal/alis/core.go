@@ -33,6 +33,9 @@ func New(host Host, fs *FileSys) (*VM, error) {
 	return v, nil
 }
 
+// Mem is the VM arena (for state comparisons against the C reference).
+func (v *VM) Mem() []byte { return v.mem }
+
 // Err is the error that stopped the VM, if any.
 func (v *VM) Err() error {
 	if v.err == nil {

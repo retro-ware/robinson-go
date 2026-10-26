@@ -1,0 +1,696 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 5d1d0c8..6fb3d97 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -106,6 +106,7 @@ list(APPEND alis_SOURCES
+     ${CMAKE_CURRENT_LIST_DIR}/src/storenames.c
+     ${CMAKE_CURRENT_LIST_DIR}/src/unpack.c
+     ${CMAKE_CURRENT_LIST_DIR}/src/utils.c
++    ${CMAKE_CURRENT_LIST_DIR}/src/harness.c
+ #   ${CMAKE_CURRENT_LIST_DIR}/src/font.c
+ )
+ 
+@@ -117,6 +118,15 @@ endif()
+ 
+ add_executable(${PROJECT_NAME} ${alis_SOURCES})
+ 
++# Differential tests (robinson-go internal/alis/cref): the same sources as a
++# static library, main renamed so Go can drive the C functions directly.
++add_library(alisref STATIC ${alis_SOURCES})
++target_compile_definitions(alisref PRIVATE main=alis_main ALIS_CONV_INPLACE=0)
++# The same build as an executable, to check it still matches the CRC logs.
++add_executable(alis_noconv ${alis_SOURCES})
++target_compile_definitions(alis_noconv PRIVATE ALIS_CONV_INPLACE=0)
++target_link_libraries(alis_noconv m z ${SDL2_LIBRARIES})
++
+ # Program version header from git (scripts/gen_version.sh); needs a POSIX sh (Git for Windows has one).
+ find_program(ALIS_SH sh)
+ if(ALIS_SH)
+@@ -126,7 +136,7 @@ if(ALIS_SH)
+     add_dependencies(${PROJECT_NAME} alis_version)
+ endif()
+ 
+-target_link_libraries(${PROJECT_NAME} m)
++target_link_libraries(${PROJECT_NAME} m z)
+ target_link_libraries(${PROJECT_NAME} ${SDL2_LIBRARIES})
+ 
+ if(SDL2_MANUAL_SET)
+@@ -136,6 +146,7 @@ else()
+ endif()
+ 
+ # Script disassembler (no SDL)
++if(FALSE)
+ add_executable(alisdis
+     ${CMAKE_CURRENT_LIST_DIR}/tools/alisdis/main.c
+     ${CMAKE_CURRENT_LIST_DIR}/tools/alisdis/decode.c
+@@ -144,6 +155,7 @@ add_executable(alisdis
+     ${CMAKE_CURRENT_LIST_DIR}/tools/alisdis/ops_v2.c
+     ${CMAKE_CURRENT_LIST_DIR}/tools/alisdis/tables_v2.c
+     ${CMAKE_CURRENT_LIST_DIR}/tools/alisdis/unpack.c)
++endif()
+ 
+ set(CPACK_PROJECT_NAME ${PROJECT_NAME})
+ set(CPACK_PROJECT_VERSION ${PROJECT_VERSION})
+diff --git a/src/alis.c b/src/alis.c
+index b8719c7..e0496f2 100644
+--- a/src/alis.c
++++ b/src/alis.c
+@@ -77,6 +77,7 @@ extern u32 testData[];
+ 
+ void readexec(const sAlisOpcode * table, char * name, u8 identation)
+ {
++    { extern long opdbg_on(void); if (name[0]=='o'&&name[1]=='p'&&opdbg_on()) fprintf(stderr,"O %s %x %02x\n",VSCRIPT->name,VSCRIPT->pc-VSCRIPT->pc_org,*(VMEM+VSCRIPT->pc)); }
+ #ifndef NDEBUG
+     if (alis.script->pc < alis.script->pc_org || alis.script->pc >= alis.script->pc_org + alis.script->data->sz || alis.script->pc - alis.script->pc_org == kVirtualRAMSize)
+     {
+diff --git a/src/alis.h b/src/alis.h
+index 02bcd6a..b0192f2 100644
+--- a/src/alis.h
++++ b/src/alis.h
+@@ -159,12 +159,13 @@ register sAlisScriptLive * vm_script __asm__ ("a5");
+ // Version-specific dispatch tables, set by alis_init (v6 overrides the pre-v6 ones).
+ extern const sAlisOpcode *tab_opcodes, *tab_codesc1, *tab_opernames, *tab_storenames, *tab_addnames;
+ void readexec_opcode_v6(void);
++void opdbg_trace(void);
+ 
+ // Fast inline dispatch macros for NDEBUG builds.
+ // Avoids function call overhead and 1KB struct copy per opcode.
+ #ifdef NDEBUG
+ # define READEXEC_FAST(table)       do { (table)[*(VMEM + VSCRIPT->pc++)].fptr(); } while(0)
+-# define readexec_opcode()          do { if (alis.platform.version >= 60) readexec_opcode_v6(); else READEXEC_FAST(opcodes); } while(0)
++# define readexec_opcode()          do { if (alis.platform.version >= 60) readexec_opcode_v6(); else { opdbg_trace(); READEXEC_FAST(opcodes); } } while(0)
+ # define readexec_codesc1name()     READEXEC_FAST(tab_codesc1)
+ # define readexec_codesc2name()     READEXEC_FAST(codesc2names)
+ # define readexec_codesc3name()     READEXEC_FAST(codesc3names)
+diff --git a/src/audio/music_v1.c b/src/audio/music_v1.c
+index 584586e..949aa0a 100644
+--- a/src/audio/music_v1.c
++++ b/src/audio/music_v1.c
+@@ -176,6 +176,7 @@ static void mv1_dsp_capture(void)
+ 
+ void mv1_gomusic(void)
+ {
++    if (getenv("MUSDBG")) fprintf(stderr, "GOMUSIC1\n");
+     audio.soundrout = mv1_soundrout;
+     
+     mv1a.flag1 = 0;
+diff --git a/src/audio/music_v2.c b/src/audio/music_v2.c
+index ae19a46..19f144d 100644
+--- a/src/audio/music_v2.c
++++ b/src/audio/music_v2.c
+@@ -136,6 +136,7 @@ void mv2_gomusic(void)
+     mv2a.muchip = 2 < chipinst;
+     mv2a.muopl2 = 2 < opl2inst;
+     mv2a.mutype = 2 >= chipinst;
++    if (getenv("MUSDBG")) fprintf(stderr, "GOMUSIC chip=%d opl2=%d type=%d\n", chipinst, opl2inst, mv2a.mutype);
+     
+     audio.muvol = (audio.muvolume >> 1) + 1;
+     audio.mutemp = (u8)(((u32)audio.mutempo * 6) >> 5);
+diff --git a/src/config.h b/src/config.h
+index 450a2e1..f0b8194 100644
+--- a/src/config.h
++++ b/src/config.h
+@@ -110,7 +110,9 @@ typedef enum {
+ # define ALIS_USE_THREADS   1
+ #endif
+ 
++#ifndef ALIS_CONV_INPLACE
+ #define ALIS_CONV_INPLACE   1
++#endif
+ 
+ // ALIS_PLANAR_CONV: 4-plane sprite storage conversion without the native render. Always on for
+ // ALIS_NATIVE_PLANAR; define alone on desktop to debug the conversion (sprites render garbled).
+diff --git a/src/image.c b/src/image.c
+index 26375e3..bb0ce5c 100644
+--- a/src/image.c
++++ b/src/image.c
+@@ -895,6 +895,7 @@ int dos_film_palette(u8 *addr)
+ // One vblank of the original timer: upload what is live, then step the fade.
+ static void dpal_tick(void)
+ {
++    if (getenv("PALDBG")) fprintf(stderr, "P %u %d %u %u %u\n", sys_ticks(), dpal.counter, dpal.reload, dpal.ftopal, dpal.step);
+     if (dpal.lock)
+         return;
+ 
+@@ -916,6 +917,7 @@ static void dpal_tick(void)
+ void dos_pal_tick(void)
+ {
+     u32 hz = sys_timeclock_hz ? sys_timeclock_hz : 60;
++    if (getenv("ACCDBG")) fprintf(stderr, "A %u %u %u\n", sys_ticks(), dpal.acc, dpal.ftopal);
+     for (dpal.acc += sys_pace_hz(); dpal.acc >= hz; dpal.acc -= hz)
+         if (dpal.ftopal)
+             dpal_tick();
+@@ -1677,6 +1679,7 @@ void putin(u16 idx)
+ void putmapin(u16 spridx, s32 bitmap)
+ {
+     sSprite *sprite = SPRITE_VAR(spridx);
++    { extern long opdbg_on(void); if (opdbg_on()) fprintf(stderr,"P %s %d %d %d %d st%d fadd%d fmul%d\n",alis.script->name,spridx,image.depx,image.depy,image.depz,sprite->state,alis.fadddes,alis.fmuldes); }
+     sprite->data = bitmap;
+     sprite->newad = 0;
+     sprite->flaginvx = image.invert_x;
+@@ -3589,6 +3592,13 @@ void clipback(void)
+ 
+ void destofen(sSprite *sprite)
+ {
++    {
++        static int dofdbg = -1;
++        if (dofdbg < 0) dofdbg = getenv("DOFDBG") ? atoi(getenv("DOFDBG")) : 0;
++        extern u64 harness_now_us(void);
++        if (dofdbg && harness_now_us() / 1000 >= (u64)dofdbg && harness_now_us() / 1000 < (u64)dofdbg + 200)
++            fprintf(stderr, "DOF %llu %x %d %d %d %x\n", harness_now_us() / 1000, sprite->newad ? sprite->newad - alis.basemain : 0, sprite->newx, sprite->newy, sprite->newd, sprite->newad ? xread8(sprite->newad + xread32(sprite->newad)) : 0);
++    }
+     // Blit destination; re-read every call to follow buffer swaps.
+     image.wdraw = image.logic;
+ 
+@@ -5893,6 +5903,7 @@ void compositor_v6(void)
+ void draw(void)
+ {
+     sys_delay_frame();
++    if (getenv("DRAWDBG")) { u16 l=image.libsprit; fprintf(stderr, "D %u %u %d L", sys_ticks(), alis.timeclock, alis.ctiming); for(int k=0;k<4&&l;k++){fprintf(stderr," %d",l); l=SPRITE_VAR(l)->to_next;} fprintf(stderr,"\n"); }
+ 
+     // Render time excludes the frame-cap sleep.
+     sys_lock_renderer();
+diff --git a/src/main.c b/src/main.c
+index d31d91a..7cb7f50 100644
+--- a/src/main.c
++++ b/src/main.c
+@@ -24,6 +24,7 @@
+ #include "image.h"
+ #include "unpack.h"
+ #include "sys/sys.h"
++#include "harness.h"
+ 
+ #include <stdlib.h>
+ #include <string.h>
+@@ -415,6 +416,7 @@ int main(int argc, char *argv[])
+             printf("#############################\n");
+             printf("# System initialization...\n");
+             printf("#############################\n");
++            harness_init();
+             sys_init(pl, fullscreen, mutesound);
+ 
+             printf("#############################\n");
+@@ -451,6 +453,7 @@ int main(int argc, char *argv[])
+             printf("# Starting ALIS VM...\n");
+             printf("#############################\n");
+             result = sys_start();
++            harness_finish();
+ 
+             printf("\n");
+             ALIS_DEBUG(EDebugSystem, "The ALIS VM has been stopped.\n");
+diff --git a/src/opcodes.c b/src/opcodes.c
+index 1151bed..af2d0ad 100644
+--- a/src/opcodes.c
++++ b/src/opcodes.c
+@@ -9296,6 +9296,7 @@ static void ctexmap(void)
+         // Type 1+: sprite-based texture mapping
+         readexec_opername();
+         xwrite32(entry + 0x10, adresdes(alis.varD7));
++        if (getenv("LANDDBG")) fprintf(stderr, "TX %x %d %x %x org %x\n", entry - alis.basemain, alis.varD7, xread32(entry + 0x10) - alis.basemain, alis.script->vram_org - alis.basemain, xread32(alis.script->vram_org - 0x14) - alis.basemain);
+         xwrite16(entry + 0x1c, xread16(alis.script->vram_org - 0xe));
+         readexec_opername();
+         xwrite16(entry + 0x16, alis.varD7);
+@@ -10988,6 +10989,7 @@ static void cpointpix(void)
+     readexec_opername_saveD6();
+     
+     pointpix(alis.varD7, alis.varD6);
++    if (getenv("PPDBG")) { extern u64 harness_now_us(void); fprintf(stderr, "PP %llu %d %d %d %d %d %d\n", harness_now_us()/1000, image.cxtstpix, image.cytstpix, image.cztstpix, image.dtstpix, image.ntstpix, image.etstpix); }
+     
+     alis.varD7 = image.cxtstpix;
+     cstore_continue();
+diff --git a/src/render/rrq3d.c b/src/render/rrq3d.c
+index 6480091..118fcae 100644
+--- a/src/render/rrq3d.c
++++ b/src/render/rrq3d.c
+@@ -1744,6 +1744,7 @@ void barsprite(s32 render_context, s16 type_idx, s16 world_x, s16 world_y, s16 u
+ {
+     sSprite *sprite = SPRITE_VAR(image.atexsprite);
+     u32 tex_entry = xread32(render_context + 0x10 + type_idx);
++    if (getenv("LANDDBG")) fprintf(stderr, "BS %d %d %d %x\n", type_idx, world_x, world_y, tex_entry - alis.basemain);
+     if (xread32(tex_entry) != 0)
+     {
+         // Project terrain position to screen space
+@@ -2065,6 +2066,7 @@ void pointpix(s16 x, s16 y)
+         {
+             u32 entity_data = (xread32(xread32(xread32(alis.atent + image.etstpix) - 0x14) + 0xe) + xread32(xread32(alis.atent + image.etstpix) - 0x14));
+             image.ntstpix = (s16)(((image.antstpix & 0xffffff) - (xread32(entity_data) + entity_data)) >> 2);
++            if (getenv("PPDBG")) fprintf(stderr, "PQ %x %x %x %d %d\n", image.antstpix, entity_data, xread32(entity_data), image.ntstpix, xread16(entity_data + 4));
+             if (xread16(entity_data + 4) <= image.ntstpix)
+             {
+                 // Sprite index out of range: fall back to base entity table
+diff --git a/src/render/rrq3d_dos.c b/src/render/rrq3d_dos.c
+index 82952f9..df9e506 100644
+--- a/src/render/rrq3d_dos.c
++++ b/src/render/rrq3d_dos.c
+@@ -1,3 +1,5 @@
++#include <stdlib.h>
++#include <stdio.h>
+ //
+ // Copyright 2023 Olivier Huguenot, Vadim Kindl
+ //
+@@ -888,7 +890,7 @@ static void barland_dos(s32 terrain_cell, s32 render_context, s16 step_x, s16 st
+     s16 sVar4;
+     u16 vbarlarg;
+ 
+-    // bartra_saved_si is set by doland_dos before this call (extra_height from altitude table)
++    if (getenv("LANDDBG")) fprintf(stderr, "BL %x %d %d %d %d %d\n", terrain_cell - alis.basemain, bary, barheight, index, barx, image.precx);
+ 
+     // === Y clipping (Ghidra lines 17407-17422) ===
+     s16 drawy = bary;  // param_1 = AX
+@@ -967,7 +969,7 @@ static void barland_dos(s32 terrain_cell, s32 render_context, s16 step_x, s16 st
+             {
+ 
+                 // Terrain cell reads (DOS LE: byte0=height, byte1=type)
+-                image.ntstpix = (u16)(xread16(terrain_cell) >> 8);
++                image.ntstpix = (u16)((u16)xread16(terrain_cell) >> 8);   // START.EXE zero-extends the type byte
+                 image.cztstpix = (u16)(xread16(terrain_cell) & 0xff);
+ 
+                 // GS:[0x840] = zoom shift (Ghidra: bVar3)
+@@ -1213,7 +1215,7 @@ static void tbarland_dos(s32 terrain_cell, s32 render_context, s16 step_x, s16 s
+     if (((drawy <= image.ytstpix) && (image.ytstpix < (s16)(drawy + barheight))) && ((image.precx <= image.xtstpix && (image.xtstpix < (s16)(image.precx + (s16)vbarlarg)))))
+     {
+ 
+-        image.ntstpix = (u16)(xread16(terrain_cell) >> 8);
++        image.ntstpix = (u16)((u16)xread16(terrain_cell) >> 8);   // START.EXE zero-extends the type byte
+         image.cztstpix = (u16)(xread16(terrain_cell) & 0xff);
+ 
+         u8 bVar3 = (u8)(xread16(render_context - 0x3c0) & 0x3f);
+diff --git a/src/script.c b/src/script.c
+index 61f1a35..2888761 100644
+--- a/src/script.c
++++ b/src/script.c
+@@ -866,6 +866,7 @@ sAlisScriptData * script_init(const char * name, u8 * data, u32 data_sz)
+     if (alis.mem + script->data_org != data)
+         memcpy(alis.mem + script->data_org, data, data_sz);
+ 
++    if (getenv("LANDDBG")) fprintf(stderr, "LD %s %x %x\n", name, script->data_org - alis.basemain, data_sz);
+     // get insert point
+     insert = search_insert(alis.nbprog, script->header.id);
+ 
+diff --git a/src/sys/sys.c b/src/sys/sys.c
+index 89651c2..d07e87f 100644
+--- a/src/sys/sys.c
++++ b/src/sys/sys.c
+@@ -1,3 +1,4 @@
++#include <ctype.h>
+ //
+ // Copyright 2023 Olivier Huguenot, Vadim Kindl
+ //
+@@ -22,6 +23,7 @@
+ #include "config.h"
+ 
+ #include "sys.h"
++#include "harness.h"
+ #include "alis.h"
+ #include "audio.h"
+ #include "channel.h"
+@@ -116,7 +118,9 @@ SDL_Keysym      button = { 0, 0, 0, 0 };
+ SDL_TimerID     timer_id;
+ SDL_sem         *render_sem = NULL;
+ 
+-#define sys_sleep(t) usleep(t)
++#define sys_sleep(t) do { if (harness_on) harness_advance_us(t); else usleep(t); } while (0)
++#define SDL_GetKeyboardState(x) (harness_on ? harness_keystate() : SDL_GetKeyboardState(x))
++#define SDL_GetModState() (harness_on ? (SDL_Keymod)harness_modstate() : SDL_GetModState())
+ 
+ #endif
+ 
+@@ -984,6 +988,7 @@ void sys_audio_callback_S16MSB(void *userdata, u8 *s, s32 buffer_length)
+     } while (0)
+ 
+     // handle music
++    { extern u64 harness_now_us(void); u64 tt=harness_now_us()/1000; extern long opdbg_on(void); if (getenv("AUDDBG") && opdbg_on()) fprintf(stderr,"M %llu muflag%d smpidx%d fsound%d\n",tt,audio.muflag,audio.smpidx,audio.fsound); }
+ 
+     if (audio.muflag > 0)
+     {
+@@ -1043,6 +1048,7 @@ void sys_audio_callback_S16MSB(void *userdata, u8 *s, s32 buffer_length)
+             isr_counter = prev_counter;
+             
+             sChannel *ch = &audio.channels[i];
++            { extern u64 harness_now_us(void); u64 t=harness_now_us()/1000; extern long opdbg_on(void); if (getenv("AUDDBG") && opdbg_on()) fprintf(stderr,"A %llu %d t%d pl%u len%u f%d v%d lp%d\n",t,i,ch->type,ch->played,ch->length,ch->freq,ch->volume,ch->loop); }
+             switch (ch->type)
+             {
+                 case eChannelTypeSample:
+@@ -1074,6 +1080,7 @@ void sys_audio_callback_S16MSB(void *userdata, u8 *s, s32 buffer_length)
+                     a1 = x0 - x1 - a0;
+                     a2 = x2 - x0;
+ # endif
++                    { extern u64 harness_now_us(void); u64 tt=harness_now_us()/1000; if (getenv("AUDDBG") && tt==607740) { fprintf(stderr,"X %d %d %d %d %d acc%u:",smpidx,x0,x1,x2,x3,accumulator); for(int k=0;k<8;k++) fprintf(stderr," %d",addr[smpidx+k]); fprintf(stderr,"\n"); } }
+ #else
+                     s0 = vt[(u8)addr[smpidx]];
+ #endif
+@@ -1149,6 +1156,7 @@ void sys_audio_callback_S16MSB(void *userdata, u8 *s, s32 buffer_length)
+                                     x2 = (length > 1) ? (s16)(addr[1] * 256) : 0;
+                                     x3 = (length > 2) ? (s16)(addr[2] * 256) : 0;
+ #endif
++                                    if (getenv("AUDDBG")) fprintf(stderr,"S %u %d %d %d %d len%u bi%d\n",fli_chunks_played,x0,x1,x2,x3,length,buffer_index);
+                                 }
+                                 else
+                                 {
+@@ -2438,6 +2446,34 @@ FILE *sys_fopen(const char *path, const char * __restrict mode)
+     return fopen(pathcpy, mode);
+ }
+ 
++// Harness: ALIS_SAVEDIR keeps written files out of the data directory
++// (like the Go port's FileSys.SaveDir); reads look there first.
++static const char *save_redirect(const char *path, int write, char *out)
++{
++    const char *dir = getenv("ALIS_SAVEDIR");
++    if (!dir)
++        return path;
++    const char *base = strrchr(path, '/');
++    base = base ? base + 1 : path;
++    snprintf(out, 1024, "%s/%s", dir, base);
++    for (char *c = out + strlen(dir) + 1; *c; c++)
++        *c = toupper((unsigned char)*c);
++    FILE *t = fopen(out, "rb");
++    if (t) { fclose(t); return out; }
++    if (!write)
++        return path;
++    FILE *src = fopen(path, "rb");
++    if (src)
++    {
++        FILE *dst = fopen(out, "wb");
++        int ch;
++        while (dst && (ch = fgetc(src)) != EOF) fputc(ch, dst);
++        if (dst) fclose(dst);
++        fclose(src);
++    }
++    return out;
++}
++
+ FILE *sys_fopen_b(char *path, u16 mode)
+ {
+     char flag[8] = "rb";
+@@ -2461,6 +2497,18 @@ FILE *sys_fopen_b(char *path, u16 mode)
+     }
+ 
+     ALIS_DEBUG(EDebugInfo, " [%s][%.3x] ", path, mode);
++    char redir[1024];
++    if (getenv("ALIS_SAVEDIR"))
++    {
++        const char *rp = save_redirect(path, (mode & 0x700) != 0, redir);
++        if (rp == redir)
++        {
++            FILE *rf = fopen(redir, flag);
++            if (!rf && !strcmp(flag, "r+b"))
++                rf = fopen(redir, "w+b");
++            return rf;
++        }
++    }
+     FILE *fp = fopen(path, flag);
+     if (fp)
+         return fp;
+@@ -2486,6 +2534,9 @@ int sys_fclose(FILE *fp)
+ 
+ u8 sys_fexists(char *path)
+ {
++    char redir[1024];
++    if (save_redirect(path, 0, redir) == redir)
++        return 1;
+     FILE *fp = fopen(path, "rb");
+     if (fp)
+     {
+@@ -2572,5 +2623,7 @@ u16 sys_get_model(void)
+ 
+ u16 sys_random(void)
+ {
++    if (harness_on)
++        return harness_random();
+     return rand() & 0xffff;
+ }
+diff --git a/src/sys/sys_sdl2.c b/src/sys/sys_sdl2.c
+index 9783d8a..585d022 100644
+--- a/src/sys/sys_sdl2.c
++++ b/src/sys/sys_sdl2.c
+@@ -45,6 +45,7 @@
+ #include "video.h"
+ 
+ #include "emu2149.h"
++#include "harness.h"
+ #include "math.h"
+ 
+ // 0 No interpolation
+@@ -104,8 +105,8 @@ void sys_audio_callback_S8(void *userdata, u8 *stream, s32 len);
+ #pragma mark - SDL2 System init
+ // ============================================================================
+ 
+-u32 sys_ticks(void) { return SDL_GetTicks(); }
+-void sys_delay(u32 ms) { SDL_Delay(ms); }
++u32 sys_ticks(void) { return harness_on ? (u32)(harness_now_us() / 1000) : SDL_GetTicks(); }
++void sys_delay(u32 ms) { if (harness_on) harness_advance_us((u64)ms * 1000); else SDL_Delay(ms); }
+ u8 *sys_get_framebuffer(int index) { (void)index; return NULL; }  // VM mallocs the render buffers
+ 
+ // Savestate load: wait out and block the audio callback
+@@ -159,7 +160,7 @@ void sys_init(sPlatform *pl, int fullscreen, int mutesound)
+     
+     {
+         u32 timer_ms = alis.platform.is_little_endian ? 17 : 20;
+-        timer_id = SDL_AddTimer(timer_ms, itroutine, NULL);
++        timer_id = harness_on ? 1 : SDL_AddTimer(timer_ms, itroutine, NULL);
+         if (!timer_id)
+         {
+             fprintf(stderr, "   Could not create timer: %s\n", SDL_GetError());
+@@ -224,7 +225,13 @@ void sys_init(sPlatform *pl, int fullscreen, int mutesound)
+     desired_spec->userdata = NULL;
+     desired_spec->size = desired_spec->samples * 2 * 2;
+     
+-    if ((audio_id = SDL_OpenAudioDevice(NULL, 0, desired_spec, audio_spec, 0)) <= 0 )
++    if (harness_on)
++    {
++        *audio_spec = *desired_spec;
++        audio_spec->format = AUDIO_S16;
++        audio_id = 0;
++    }
++    else if ((audio_id = SDL_OpenAudioDevice(NULL, 0, desired_spec, audio_spec, 0)) <= 0 )
+     {
+         fprintf(stderr, "   Could not open audio: %s\n", SDL_GetError());
+         exit(-1);
+@@ -254,7 +261,8 @@ void sys_init(sPlatform *pl, int fullscreen, int mutesound)
+     isr_step = (sys_sfx_tick_hz * 65536UL) / (u32)audio_spec->freq;
+     isr_counter = 0x10000;
+     
+-    SDL_PauseAudioDevice(audio_id, mutesound);
++    if (!harness_on)
++        SDL_PauseAudioDevice(audio_id, mutesound);
+     
+     render_sem = SDL_CreateSemaphore(1);
+     if (render_sem == NULL)
+@@ -266,10 +274,22 @@ void sys_init(sPlatform *pl, int fullscreen, int mutesound)
+     poll_ticks = SDL_GetTicks();
+     gettimeofday(&frame_time, NULL);
+     gettimeofday(&loop_time, NULL);
++    if (harness_on)
++    {
++        frame_time.tv_sec = loop_time.tv_sec = 0;
++        frame_time.tv_usec = loop_time.tv_usec = 0;
++    }
+ }
+ 
+ void sys_init_timers(void)
+ {
++    if (harness_on)
++    {
++        u64 now = harness_now_us();
++        frame_time.tv_sec = loop_time.tv_sec = now / 1000000ULL;
++        frame_time.tv_usec = loop_time.tv_usec = now % 1000000ULL;
++        return;
++    }
+     
+     poll_ticks = SDL_GetTicks();
+     gettimeofday(&frame_time, NULL);
+@@ -278,6 +298,18 @@ void sys_init_timers(void)
+ 
+ void sys_sleep_until(struct timeval *start, s32 len)
+ {
++    if (harness_on)
++    {
++        u64 st = (u64)start->tv_sec * 1000000ULL + start->tv_usec;
++        u64 now = harness_now_us();
++        if (now < st + (u64)len)
++            harness_advance_us(st + (u64)len - now);
++        now = harness_now_us();
++        start->tv_sec = now / 1000000ULL;
++        start->tv_usec = now % 1000000ULL;
++        return;
++    }
++
+     struct timeval now;
+     gettimeofday(&now, NULL);
+     
+@@ -291,6 +323,20 @@ void sys_sleep_until(struct timeval *start, s32 len)
+ 
+ void sys_sleep_interactive(s32 *loop, s32 intr)
+ {
++    if (intr > 0 && harness_on)
++    {
++        *loop *= 1000;
++        intr *= 1000;
++        while (*loop > intr || (*loop > 0 && io_inkey() == 0))
++        {
++            harness_advance_us(k_event_ticks);
++            *loop -= k_event_ticks;
++        }
++
++        *loop = 0;
++        return;
++    }
++
+     if (intr > 0)
+     {
+         *loop *= 1000;
+@@ -324,6 +370,18 @@ void sys_delay_frame(void)
+ 
+ void sys_sleep_until_music_stops(void)
+ {
++    if (harness_on)
++    {
++        audio.working = 1;
++        for (int count = 0; count < 100 && audio.muflag; count++)
++            harness_advance_us(10000);
++        audio.muflag = 0;
++        audio.musicId = 0xffff;
++        for (int count = 0; count < 100 && audio.working; count++)
++            harness_advance_us(10000);
++        return;
++    }
++
+     if (SDL_GetAudioDeviceStatus(audio_id) != SDL_AUDIO_PLAYING)
+         return;
+     
+@@ -351,6 +409,12 @@ u8 sys_start(void)
+ 
+     alis.state = eAlisStateRunning;
+ 
++    if (harness_on)
++    {
++        alis_thread(NULL);
++        return 0;
++    }
++
+     SDL_Thread *thread = SDL_CreateThread(alis_thread, "ALIS", (void *)NULL);
+     if (thread == NULL)
+     {
+@@ -558,35 +622,8 @@ void sys_poll_event(void)
+ #pragma mark - SDL2 RENDER
+ // ============================================================================
+ 
+-void sys_render(pixelbuf_t buffer)
++void sys_compose(pixelbuf_t buffer, u32 *pixels)
+ {
+-    dirty_len = 0;
+-    SDL_SemWait(render_sem);
+-
+-    // v6 runtime resolution switch
+-    if (buffer.w != width || buffer.h != height)
+-    {
+-        width = buffer.w;
+-        height = buffer.h;
+-
+-        free(pixels);
+-        pixels = malloc((size_t)width * (size_t)height * sizeof(*pixels));
+-        memset(pixels, 0, (size_t)width * (size_t)height * sizeof(*pixels));
+-
+-        if (texture)
+-            SDL_DestroyTexture(texture);
+-        
+-        texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, width, height);
+-        SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_NONE);
+-        SDL_RenderSetLogicalSize(renderer, width, (width * 3) / 4);
+-    }
+-
+-    if (dirty_mouse)
+-    {
+-        dirty_mouse = false;
+-        sys_dirty_mouse();
+-    }
+-
+     if (buffer.rgb)
+     {
+         memcpy(pixels, buffer.rgb, (size_t)buffer.w * buffer.h * sizeof(*pixels));
+@@ -800,6 +837,39 @@ void sys_render(pixelbuf_t buffer)
+         }
+     }
+ 
++}
++
++void sys_render(pixelbuf_t buffer)
++{
++    dirty_len = 0;
++    SDL_SemWait(render_sem);
++
++    // v6 runtime resolution switch
++    if (buffer.w != width || buffer.h != height)
++    {
++        width = buffer.w;
++        height = buffer.h;
++
++        free(pixels);
++        pixels = malloc((size_t)width * (size_t)height * sizeof(*pixels));
++        memset(pixels, 0, (size_t)width * (size_t)height * sizeof(*pixels));
++
++        if (texture)
++            SDL_DestroyTexture(texture);
++        
++        texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, width, height);
++        SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_NONE);
++        SDL_RenderSetLogicalSize(renderer, width, (width * 3) / 4);
++    }
++
++    if (dirty_mouse)
++    {
++        dirty_mouse = false;
++        sys_dirty_mouse();
++    }
++
++    sys_compose(buffer, pixels);
++
+     SDL_UpdateTexture(texture, NULL, pixels, width * sizeof(*pixels));
+     
+     // clear & render
+@@ -828,9 +898,12 @@ void sys_deinit(void)
+         }
+     }
+ 
+-    SDL_RemoveTimer(timer_id);
+-    SDL_PauseAudioDevice(audio_id, 1);
+-    SDL_CloseAudioDevice(audio_id);
++    if (!harness_on)
++    {
++        SDL_RemoveTimer(timer_id);
++        SDL_PauseAudioDevice(audio_id, 1);
++        SDL_CloseAudioDevice(audio_id);
++    }
+     SDL_DestroySemaphore(render_sem);
+     
+     SDL_Delay(20);   // 20ms fail-safe delay to make sure that sound buffer is empty
+diff --git a/src/video/fli.c b/src/video/fli.c
+index ecf58f7..d90948d 100644
+--- a/src/video/fli.c
++++ b/src/video/fli.c
+@@ -441,7 +441,7 @@ u32 fli_audio_push(const s8 *src, u32 len, s16 freq)
+     if (fli_audio_copybuf == NULL)
+     {
+         fli_audio_copybuf = (fli_audio_slot_t *)
+-            malloc(sizeof(fli_audio_slot_t) * FLI_AUDIO_QUEUE_SIZE);
++            calloc(FLI_AUDIO_QUEUE_SIZE, sizeof(fli_audio_slot_t));
+         
+         if (fli_audio_copybuf == NULL)
+             return len;                  // no room for speech buffers — film plays silent
+diff --git a/src/video/video.c b/src/video/video.c
+index d714460..2d7b035 100644
+--- a/src/video/video.c
++++ b/src/video/video.c
+@@ -1,3 +1,4 @@
++#include <stdlib.h>
+ //
+ // Copyright 2023 Olivier Huguenot, Vadim Kindl
+ //
+@@ -240,6 +241,7 @@ void runfilm(void)
+         u8 chunks_enqueued = (u8)((fli_audio_q_head - q_head_before)
+                                   & (FLI_AUDIO_QUEUE_SIZE - 1));
+         chunks_target += chunks_enqueued;
++        if (getenv("FLIDBG")) fprintf(stderr, "F %u %d enq=%u qh=%u qt=%u tc=%u\n", sys_ticks(), bfilm.frame, chunks_enqueued, fli_audio_q_head, fli_audio_q_tail, alis.timeclock);
+ 
+         if (0 < bfilm.waitclock)
+         {

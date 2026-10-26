@@ -28,20 +28,24 @@ type event struct {
 }
 
 type host struct {
-	events  []event
-	evpos   int
-	stop    bool
-	vm      *alis.VM
-	maxUs   uint64
-	logf    *bufio.Writer
-	dumpDir string
-	dumpAt  []uint64
-	sample  uint32
-	lastCRC uint32
-	rnd     uint32
-	buf     []byte
-	wav     *os.File
-	wavN    uint32
+	events    []event
+	evpos     int
+	stop      bool
+	vm        *alis.VM
+	maxUs     uint64
+	logf      *bufio.Writer
+	memf      *bufio.Writer
+	memEvery  uint32
+	memDump   string
+	memDumpAt int64
+	dumpDir   string
+	dumpAt    []uint64
+	sample    uint32
+	lastCRC   uint32
+	rnd       uint32
+	buf       []byte
+	wav       *os.File
+	wavN      uint32
 }
 
 func (h *host) WallUs() uint64      { return 0 }
@@ -170,6 +174,12 @@ func (h *host) Frame(us uint64, argb []uint32, w, ht int) {
 	}
 	crc := crc32.ChecksumIEEE(h.buf)
 	ms := us / 1000
+	if int64(h.sample) == h.memDumpAt {
+		os.WriteFile(h.memDump, h.vm.Mem(), 0o644)
+	}
+	if h.memf != nil && h.sample%h.memEvery == 0 {
+		fmt.Fprintf(h.memf, "%d %d %08x\n", h.sample, ms, crc32.ChecksumIEEE(h.vm.Mem()))
+	}
 	if crc != h.lastCRC {
 		h.lastCRC = crc
 		if h.logf != nil {
@@ -196,6 +206,10 @@ func main() {
 	data := flag.String("data", "orig/cd", "game data directory")
 	maxMs := flag.Uint64("maxms", 20000, "stop at this virtual time (ms)")
 	logPath := flag.String("log", "", "CRC log file")
+	memDump := flag.String("memdump", "", "write the VM memory at sample -memdumpat to this file")
+	memDumpAt := flag.Int64("memdumpat", -1, "sample index for -memdump")
+	memEvery := flag.Int("memevery", 1, "log the memory CRC every n-th sample")
+	memPath := flag.String("memlog", "", "CRC of the VM memory every sample (C harness ALIS_MEMLOG)")
 	dump := flag.String("dump", "", "PNG dump directory")
 	dumpAt := flag.String("dumpat", "", "comma separated ms to dump")
 	input := flag.String("input", "", "input script (C harness ALIS_INPUT format)")
@@ -212,6 +226,16 @@ func main() {
 		defer f.Close()
 		h.logf = bufio.NewWriter(f)
 		defer h.logf.Flush()
+	}
+	if *memPath != "" {
+		f, err := os.Create(*memPath)
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer f.Close()
+		h.memf = bufio.NewWriter(f)
+		h.memEvery = uint32(max(1, *memEvery))
+		defer h.memf.Flush()
 	}
 	if *wav != "" {
 		f, err := os.Create(*wav)
@@ -238,6 +262,7 @@ func main() {
 		}
 		h.events = evs
 	}
+	h.memDump, h.memDumpAt = *memDump, *memDumpAt
 	vm, err := alis.New(h, alis.NewFileSys(*data, cmp.Or(*save, *data)))
 	if err != nil {
 		log.Fatal(err)
