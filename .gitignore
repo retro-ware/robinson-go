@@ -1,0 +1,12 @@
+# original game data and third-party reference checkouts (never commit)
+/orig/
+/ref/
+/data/
+/save/
+/out/
+*.png
+!docs/**/*.png
+/robinson
+/rrq
+/.venv/
+/ghidra/
