@@ -277,29 +277,39 @@ func cscset(v *VM) {
 func cclipping(v *VM)  { v.fswitch = 0 }
 func cswitching(v *VM) { v.fswitch = 1 }
 
-// getVector reads a form index and returns its centre.
+// formAt is the address of form idx of the running script, unchecked
+// (START.EXE 0x7139).
+func (v *VM) formAt(idx int16) uint32 {
+	addr := v.scriptOrg(v.script.vramOrg)
+	addr += uint32(v.r32(addr + 0xe))
+	addr += uint32(v.r32(addr + 6))
+	return uint32(int32(addr) + int32(v.r16(uint32(int32(addr)+int32(idx*2)))))
+}
+
+// getVector reads a form index and returns the centre of its box, mirrored
+// with the entity (START.EXE 0x7176).
 func (v *VM) getVector(x, y, z *int16) {
 	v.readexecOpername()
-	frm := uint32(v.adresform(int16(v.varD7)))
-	test := v.r8(frm)
-	switch {
+	frm := v.formAt(int16(v.varD7))
+	s8 := func(o uint32) int16 { return int16(int8(v.r8(frm + o))) }
+	switch test := int8(v.r8(frm)); {
 	case test == 0:
-		*x = int16(v.r8(frm+4)) + int16(v.r8(frm+7))>>1
-		*z = int16(v.r8(frm+5)) + int16(v.r8(frm+8))>>1
-		*y = int16(v.r8(frm+6)) + int16(v.r8(frm+9))>>1
-	case int8(test) < 0:
-		v.wcx, v.wcy, v.wcz = 0, 0, 0
+		*x = s8(4) + s8(7)>>1
+		*y = s8(5) + s8(8)>>1
+		*z = s8(6) + s8(9)>>1
+	case test < 0:
+		v.alisError(0x14)
 		return
 	case test == 1:
 		*x = v.r16(frm+4) + v.r16(frm+0xa)>>1
-		*z = v.r16(frm+6) + v.r16(frm+0xc)>>1
-		*y = v.r16(frm+8) + v.r16(frm+0xe)>>1
+		*y = v.r16(frm+6) + v.r16(frm+0xc)>>1
+		*z = v.r16(frm+8) + v.r16(frm+0xe)>>1
 	default:
 		*x = v.r16(frm + 2)
-		*z = v.r16(frm + 4)
-		*y = v.r16(frm + 6)
+		*y = v.r16(frm + 4)
+		*z = v.r16(frm + 6)
 	}
-	if 0x14 < v.r8(v.script.vramOrg-0x2e) && v.xinv(v.script.vramOrg) != 0 {
+	if int8(v.r8(v.script.vramOrg-0x2e)) >= 0x15 && v.xinv(v.script.vramOrg) != 0 {
 		*x = -*x
 	}
 }

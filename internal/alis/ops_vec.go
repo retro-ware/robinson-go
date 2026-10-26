@@ -108,6 +108,7 @@ func (v *VM) vectorTarget() {
 }
 
 func cvtstmov(v *VM) {
+	v.tstinv = v.xinv(v.script.vramOrg)
 	v.vectorTarget()
 	v.readexecOpername()
 	v.matmask = int16(v.varD7)
@@ -117,6 +118,7 @@ func cvtstmov(v *VM) {
 }
 
 func cvftstmov(v *VM) {
+	v.tstinv = v.xinv(v.script.vramOrg)
 	v.vectorTarget()
 	v.readexecOpername()
 	v.matmask = int16(v.varD7)

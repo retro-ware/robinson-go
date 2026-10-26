@@ -10,6 +10,7 @@ package cref
 #cgo pkg-config: sdl2
 #cgo LDFLAGS: ${SRCDIR}/../../../ref/alis/build/libalisref.a -lz -lm
 #include <stdlib.h>
+#include <string.h>
 #include "alis.h"
 #include "platform.h"
 #include "harness.h"
@@ -62,6 +63,22 @@ static void cref_set_regs(const cref_regs *r)
     alis.script->pc = r->pc; alis.script->vacc_off = r->vacc_off; alis.script->running = r->running;
     alis.fseq = r->fseq; alis.saversp = r->saversp; alis.random_number = r->rnd;
     alis.state = eAlisStateRunning;
+}
+typedef struct { s16 wcx, wcy, wcz, wforme, matmask; s32 ptrent; s16 tablent[256], matent[256]; u8 witmov, fmitmov, fallent, tstinv; u16 goodmat; } cref_ent;
+extern u8 tstinv;
+static void cref_get_ent(cref_ent *e)
+{
+    e->wcx = alis.wcx; e->wcy = alis.wcy; e->wcz = alis.wcz; e->wforme = alis.wforme; e->matmask = alis.matmask;
+    e->ptrent = (s32)(alis.ptrent - alis.tablent);
+    memcpy(e->tablent, alis.tablent, sizeof e->tablent); memcpy(e->matent, alis.matent, sizeof e->matent);
+    e->witmov = alis.witmov; e->fmitmov = alis.fmitmov; e->fallent = alis.fallent; e->goodmat = alis.goodmat; e->tstinv = tstinv;
+}
+static void cref_set_ent(const cref_ent *e)
+{
+    alis.wcx = e->wcx; alis.wcy = e->wcy; alis.wcz = e->wcz; alis.wforme = e->wforme; alis.matmask = e->matmask;
+    alis.ptrent = alis.tablent + e->ptrent;
+    memcpy(alis.tablent, e->tablent, sizeof e->tablent); memcpy(alis.matent, e->matent, sizeof e->matent);
+    alis.witmov = e->witmov; alis.fmitmov = e->fmitmov; alis.fallent = e->fallent; alis.goodmat = e->goodmat; tstinv = e->tstinv;
 }
 static void cref_step(void) { tab_opcodes[*(alis.mem + alis.script->pc++)].fptr(); }
 static u8 *cref_mem(void) { return alis.mem; }
@@ -309,3 +326,32 @@ func SetRegs(r Regs) {
 
 // Step executes one opcode of the current script.
 func Step() { C.cref_step() }
+
+// Ent is the entity-test state (tstmov family, near/view lists).
+type Ent struct {
+	Wcx, Wcy, Wcz, Wforme, Matmask   int16
+	Ptrent                           int32
+	Tablent, Matent                  [256]int16
+	Witmov, Fmitmov, Fallent, Tstinv uint8
+	Goodmat                          uint16
+}
+
+func GetEnt() (e Ent) {
+	var c C.cref_ent
+	C.cref_get_ent(&c)
+	e = Ent{Wcx: int16(c.wcx), Wcy: int16(c.wcy), Wcz: int16(c.wcz), Wforme: int16(c.wforme), Matmask: int16(c.matmask),
+		Ptrent: int32(c.ptrent), Witmov: uint8(c.witmov), Fmitmov: uint8(c.fmitmov), Fallent: uint8(c.fallent), Tstinv: uint8(c.tstinv), Goodmat: uint16(c.goodmat)}
+	for i := range 256 {
+		e.Tablent[i], e.Matent[i] = int16(c.tablent[i]), int16(c.matent[i])
+	}
+	return
+}
+
+func SetEnt(e Ent) {
+	c := C.cref_ent{wcx: C.s16(e.Wcx), wcy: C.s16(e.Wcy), wcz: C.s16(e.Wcz), wforme: C.s16(e.Wforme), matmask: C.s16(e.Matmask),
+		ptrent: C.s32(e.Ptrent), witmov: C.u8(e.Witmov), fmitmov: C.u8(e.Fmitmov), fallent: C.u8(e.Fallent), tstinv: C.u8(e.Tstinv), goodmat: C.u16(e.Goodmat)}
+	for i := range 256 {
+		c.tablent[i], c.matent[i] = C.s16(e.Tablent[i]), C.s16(e.Matent[i])
+	}
+	C.cref_set_ent(&c)
+}

@@ -11,10 +11,36 @@ func cwmov(v *VM) {
 	v.add16(vram+scrWCZ, z)
 }
 
-func cwtstmov(v *VM)  {}
-func cwftstmov(v *VM) {}
+// cwtstmov and cwftstmov test the move by a form's centre (START.EXE 0x7248).
+func cwtstmov(v *VM) {
+	v.wtstmov()
+	v.wforme = v.cforme(v.script.vramOrg)
+	v.clipform()
+	crstent(v)
+}
+
+func cwftstmov(v *VM) {
+	v.wtstmov()
+	v.readexecOpername()
+	v.wforme = int16(v.varD7)
+	v.clipform()
+	crstent(v)
+}
+
+func (v *VM) wtstmov() {
+	vram := v.script.vramOrg
+	v.tstinv = v.xinv(vram)
+	var x, y, z int16
+	v.getVector(&x, &y, &z)
+	v.wcx = x + v.r16(vram+scrWCX)
+	v.wcy = y + v.r16(vram+scrWCY)
+	v.wcz = z + v.r16(vram+scrWCZ)
+	v.readexecOpername()
+	v.matmask = int16(v.varD7)
+}
 
 func ctstform(v *VM) {
+	v.tstinv = v.xinv(v.script.vramOrg)
 	vram := v.script.vramOrg
 	v.wcx = v.r16(vram + scrWCX)
 	v.wcy = v.r16(vram + scrWCY)

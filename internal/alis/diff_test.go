@@ -393,12 +393,25 @@ func (v *VM) setRegs(r cref.Regs) {
 	v.state = stateRunning
 }
 
+func (v *VM) ent() cref.Ent {
+	return cref.Ent{Wcx: v.wcx, Wcy: v.wcy, Wcz: v.wcz, Wforme: v.wforme, Matmask: v.matmask, Ptrent: int32(v.ptrent),
+		Tablent: v.tablent, Matent: v.matent, Witmov: v.witmov, Fmitmov: v.fmitmov, Fallent: v.fallent, Tstinv: v.tstinv, Goodmat: v.goodmat}
+}
+
+func (v *VM) setEnt(e cref.Ent) {
+	v.wcx, v.wcy, v.wcz, v.wforme, v.matmask, v.ptrent = e.Wcx, e.Wcy, e.Wcz, e.Wforme, e.Matmask, int(e.Ptrent)
+	v.tablent, v.matent, v.witmov, v.fmitmov, v.fallent, v.goodmat, v.tstinv = e.Tablent, e.Matent, e.Witmov, e.Fmitmov, e.Fallent, e.Goodmat, e.Tstinv
+}
+
 // fuzzOps are the opcodes of the expression engine and control flow:
 // jumps, calls, branches, store/eval/arithmetic, loops and switches.
 var fuzzOps = []byte{
 	0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10, 0x11,
 	0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d,
 	0x1e, 0x1f, 0x20, 0x21, 0x22, 0x23, 0x2b, 0x2c, 0x2d, 0x2e, 0x2f,
+	// entity tests: ctstmov, ctstset, cftstmov, cftstset, csuccent, cpredent,
+	// crstent, cvtstmov, cvftstmov, cwmov, cwtstmov, cwftstmov, ctstform, cavtstmov
+	0x53, 0x54, 0x55, 0x56, 0x57, 0x58, 0x60, 0x8e, 0x8f, 0xa2, 0xa3, 0xa4, 0xa5, 0xf9,
 }
 
 // TestOpcodeFuzz runs the game to a live state in both VMs, then from that
@@ -410,6 +423,10 @@ func TestOpcodeFuzz(t *testing.T) {
 	diffMem(t, "start", v.Mem(), cref.Mem())
 	base := bytes.Clone(v.Mem())
 	regs := v.regs()
+	ent := v.ent()
+	if c := cref.GetEnt(); c != ent {
+		t.Fatalf("entity state differs at start:\ngo %+v\nc  %+v", ent, c)
+	}
 	if c := cref.GetRegs(); c != regs {
 		t.Fatalf("registers differ at start:\ngo %+v\nc  %+v", regs, c)
 	}
@@ -429,6 +446,8 @@ func TestOpcodeFuzz(t *testing.T) {
 		rr := regs
 		rr.D6, rr.D7 = int32(r.Uint32()), int32(int16(r.Uint32()))
 		v.setRegs(rr)
+		ent.Tstinv = uint8(r.IntN(2))
+		v.setEnt(ent)
 		v.err = nil
 		ok := func() (ok bool) {
 			defer func() { recover() }()
@@ -442,10 +461,14 @@ func TestOpcodeFuzz(t *testing.T) {
 		copy(cm, base)
 		copy(cm[regs.PC:], code)
 		cref.SetRegs(rr)
+		cref.SetEnt(ent)
 		cref.Step()
 		ran++
 		if g, w := v.regs(), cref.GetRegs(); g != w {
 			t.Fatalf("case %d op %#02x code % x (sd7 %q):\ngo %+v\nc  %+v", c, op, code, v.cstr(rr.Sd7), g, w)
+		}
+		if g, w := v.ent(), cref.GetEnt(); g != w {
+			t.Fatalf("case %d op %#02x code % x: entity state\ngo %+v\nc  %+v", c, op, code, g, w)
 		}
 		if !bytes.Equal(v.mem, cm) {
 			t.Logf("case %d op %#02x code % x", c, op, code)

@@ -25,9 +25,9 @@ every 20 ms.
 - `csetmouse`: y comes from a stale D6.
 - `cworld`: alis writes vram+0xffde/0xffdf; the port writes ctx -0x22/-0x21.
 - `cdefworld`: alis writes all 6 bytes to the same address.
-- Handlers missing in alis for v3.1 (consume no operands): ctstset, cinitab, cfcreat, cfdel,
-  cfwritei, cpicture, cfindmat, cnearcla, cviewcla, cwtstmov, cwftstmov, csczoom, cautomode,
-  cscaset, cscamov, cscsun, ccancel.
+- Handlers missing in alis for v3.1 (consume no operands): cinitab, cfcreat, cfdel,
+  cfwritei, cpicture, cfindmat, cnearcla, cviewcla, csczoom, cautomode,
+  cscaset, cscamov, cscsun, ccancel, and the oper oright.
 - `cfreadb`: returns before reading the length operand when the handle is empty.
 - `walkland` head bob sampling; `landalti` flag==1 pointer add is a no-op.
 - `cgettime`: alis returns 0,0,0; original returns the DOS time.
@@ -78,6 +78,11 @@ Reference bugs found this way (fixed in the reference, the port follows START.EX
   dead entities (vram <= 0, D7 unchanged for reads); the operands of the table forms are
   (offset, entity variable). alis lacked ahimb, ahimp, ahimtc, ahimti and the table reads; the
   port lacked shimp..shimti. The reference has a v3.1 path in src/him31.h.
+- Form centre (`getVector`, START.EXE 0x7176, cwmov/cwlive/cwtstmov): bytes are signed, the
+  three values are x/y/z in order (alis swapped y and z), the form address is unchecked, the
+  mirror test is a signed `>= 0x15`; a negative form type is error 20 ("vecteur multiple").
+- ctstset, cwtstmov, cwftstmov were missing in alis (now ported from 0x74d4/0x7248/0x729a).
+- The test opcodes latch the own mirror flag (0x1602e) for monoform; cavtstmov doesn't set it.
 
 Differential tests (`go test -tags difftest ./internal/alis`, internal/alis/cref links
 ref/alis/build/libalisref.a): arena after init and after 8 s of play, sample mixer, MV2 player,

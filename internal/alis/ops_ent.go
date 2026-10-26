@@ -121,7 +121,7 @@ func (v *VM) monoform(entVram, entFormedata, formedata, entBaseform, entWforme2x
 	default:
 		return true
 	}
-	if v.xinv(v.script.vramOrg) != 0 {
+	if v.tstinv != 0 {
 		fx = -fx
 		v.px2 = -v.px2
 	}
@@ -234,6 +234,7 @@ func crstent(v *VM) {
 }
 
 func ctstmov(v *VM) {
+	v.tstinv = v.xinv(v.script.vramOrg)
 	vram := v.script.vramOrg
 	v.readexecOpername()
 	v.wcx = v.r16(vram+scrWCX) + int16(v.varD7)
@@ -248,10 +249,23 @@ func ctstmov(v *VM) {
 	crstent(v)
 }
 
-// TODO(START.EXE): alis has no v3 ctstset (it consumes no operands).
-func ctstset(v *VM) {}
+func ctstset(v *VM) {
+	v.tstinv = v.xinv(v.script.vramOrg)
+	v.readexecOpername()
+	v.wcx = int16(v.varD7)
+	v.readexecOpername()
+	v.wcy = int16(v.varD7)
+	v.readexecOpername()
+	v.wcz = int16(v.varD7)
+	v.readexecOpername()
+	v.matmask = int16(v.varD7)
+	v.wforme = v.cforme(v.script.vramOrg)
+	v.clipform()
+	crstent(v)
+}
 
 func cftstmov(v *VM) {
+	v.tstinv = v.xinv(v.script.vramOrg)
 	vram := v.script.vramOrg
 	v.readexecOpername()
 	v.wcx = v.r16(vram+scrWCX) + int16(v.varD7)
@@ -268,6 +282,7 @@ func cftstmov(v *VM) {
 }
 
 func cftstset(v *VM) {
+	v.tstinv = v.xinv(v.script.vramOrg)
 	v.readexecOpername()
 	v.wcx = int16(v.varD7)
 	v.readexecOpername()

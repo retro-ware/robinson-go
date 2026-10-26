@@ -147,6 +147,7 @@ type VM struct {
 
 	wcx, wcy, wcz int16
 	wforme        int16
+	tstinv        uint8 // own form mirrored, latched by the test opcodes (0x1602e)
 	matmask       int16
 	poldy, poldx  int16
 

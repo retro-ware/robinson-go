@@ -15,6 +15,7 @@ func (e *Error) Error() string { return e.Msg }
 
 // alisErrors are START.EXE's messages for its error screen (table 0x1c626).
 var alisErrors = map[int]string{
+	0x14: "Interdit:vecteur multiple",
 	0x1b: "him négatif - read/byte -",
 	0x1d: "him négatif - read/word -",
 	0x1f: "him négatif - write/byte -",

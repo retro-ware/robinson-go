@@ -389,10 +389,182 @@ index d31d91a..7cb7f50 100644
              printf("\n");
              ALIS_DEBUG(EDebugSystem, "The ALIS VM has been stopped.\n");
 diff --git a/src/opcodes.c b/src/opcodes.c
-index 1151bed..46c6539 100644
+index 1151bed..e56fe29 100644
 --- a/src/opcodes.c
 +++ b/src/opcodes.c
-@@ -9296,6 +9296,7 @@ static void ctexmap(void)
+@@ -1030,8 +1030,52 @@ static void cswitching(void)
+     alis.fswitch = 1;
+ }
+ 
++// START.EXE 0x1602e: the own form's mirror flag, latched by the test opcodes
++// (cavtstmov leaves it alone) and read by monoform.
++u8 tstinv;
++
+ void get_vector(s16 *x, s16 *y, s16 *z)
+ {
++    if (alis.platform.version == 31)
++    {
++        // START.EXE 0x7176: unchecked form address, signed bytes, x/y/z order.
++        readexec_opername();
++        u32 a = alis.script->vram_org;
++        u32 frm = xread32(a - 0x14);
++        frm += xread32(frm + 0xe);
++        frm += xread32(frm + 6);
++        frm += (s16)xread16(frm + (s16)(alis.varD7 * 2));
++        s8 test = (s8)xread8(frm);
++        if (test == 0)
++        {
++            *x = (s16)(s8)xread8(frm + 4) + ((s16)(s8)xread8(frm + 7) >> 1);
++            *y = (s16)(s8)xread8(frm + 5) + ((s16)(s8)xread8(frm + 8) >> 1);
++            *z = (s16)(s8)xread8(frm + 6) + ((s16)(s8)xread8(frm + 9) >> 1);
++        }
++        else if (test < 0)
++        {
++            fprintf(stderr, "%s: Error 20:Interdit:vecteur multiple\n", alis.script->name);
++            alis.state = eAlisStateStopped;
++            alis.script->running = 0;
++            return;
++        }
++        else if (test == 1)
++        {
++            *x = (s16)xread16(frm + 4) + ((s16)xread16(frm + 0xa) >> 1);
++            *y = (s16)xread16(frm + 6) + ((s16)xread16(frm + 0xc) >> 1);
++            *z = (s16)xread16(frm + 8) + ((s16)xread16(frm + 0xe) >> 1);
++        }
++        else
++        {
++            *x = (s16)xread16(frm + 2);
++            *y = (s16)xread16(frm + 4);
++            *z = (s16)xread16(frm + 6);
++        }
++        if ((s8)get_0x2e_script_header_word_2(a) >= 0x15 && get_0x03_xinv(a) != 0)
++            *x = -*x;
++        return;
++    }
++
+     readexec_opername();
+     
+     s16 index = alis.varD7;
+@@ -2519,7 +2563,7 @@ s32 monoform(s32 ent_vram, s32 ent_formedata, s32 formedata, s32 ent_baseform, s
+         return 1;
+     }
+ 
+-    if (get_0x03_xinv(alis.script->vram_org) != 0)
++    if ((alis.platform.version == 31 ? tstinv : get_0x03_xinv(alis.script->vram_org)) != 0)
+     {
+         frmx = -frmx;
+         px2 = -px2;
+@@ -3634,6 +3678,7 @@ static void v6_tstscan_elem(void)
+ // Codopname no. 084 opcode 0x53 ctstmov
+ static void ctstmov(void)
+ {
++    tstinv = get_0x03_xinv(alis.script->vram_org);
+     readexec_opername();
+     alis.wcx = xread16(alis.script->vram_org + ALIS_SCR_WCX) + alis.varD7;
+     readexec_opername();
+@@ -3685,7 +3730,19 @@ static void ctstset(void)
+         return;
+     }
+ 
+-    ALIS_DEBUG(EDebugWarning, "MISSING: %s", __FUNCTION__);
++    // START.EXE 0x74d4
++    tstinv = get_0x03_xinv(alis.script->vram_org);
++    readexec_opername();
++    alis.wcx = alis.varD7;
++    readexec_opername();
++    alis.wcy = alis.varD7;
++    readexec_opername();
++    alis.wcz = alis.varD7;
++    readexec_opername();
++    alis.matmask = alis.varD7;
++    alis.wforme = get_0x1a_cforme(alis.script->vram_org);
++    clipform();
++    crstent();
+ }
+ 
+ // v6 dispatch target for ctstset
+@@ -3710,6 +3767,7 @@ static void ctstset_v6(void)
+ // Codopname no. 086 opcode 0x55 cftstmov
+ static void cftstmov(void)
+ {
++    tstinv = get_0x03_xinv(alis.script->vram_org);
+     readexec_opername();
+     alis.wcx = xread16(alis.script->vram_org + ALIS_SCR_WCX) + alis.varD7;
+     readexec_opername();
+@@ -3740,6 +3798,7 @@ static void cftstmov_v6(void)
+ // Codopname no. 087 opcode 0x56 cftstset
+ static void cftstset(void)
+ {
++    tstinv = get_0x03_xinv(alis.script->vram_org);
+     if (alis.platform.version == 10)
+     {
+         // v1.0 handler is relative, same as cftstmov
+@@ -5755,6 +5814,7 @@ static void cescape(void)
+ // Codopname no. 143 opcode 0x8e cvtstmov
+ static void cvtstmov(void)
+ {
++    tstinv = get_0x03_xinv(alis.script->vram_org);
+     alis.wcx = (s8)xread8(alis.script->vram_org + ALIS_SCR_WCX2) + xread16(alis.script->vram_org + ALIS_SCR_WCX);
+     alis.wcy = (s8)xread8(alis.script->vram_org + ALIS_SCR_WCY2) + xread16(alis.script->vram_org + ALIS_SCR_WCY);
+     alis.wcz = (s8)xread8(alis.script->vram_org + ALIS_SCR_WCZ2) + xread16(alis.script->vram_org + ALIS_SCR_WCZ);
+@@ -5779,6 +5839,7 @@ static void cvtstmov_v6(void)
+ // Codopname no. 144 opcode 0x8f cvftstmov
+ static void cvftstmov(void)
+ {
++    tstinv = get_0x03_xinv(alis.script->vram_org);
+     alis.wcx = (s8)xread8(alis.script->vram_org + ALIS_SCR_WCX2) + xread16(alis.script->vram_org + ALIS_SCR_WCX);
+     alis.wcy = (s8)xread8(alis.script->vram_org + ALIS_SCR_WCY2) + xread16(alis.script->vram_org + ALIS_SCR_WCY);
+     alis.wcz = (s8)xread8(alis.script->vram_org + ALIS_SCR_WCZ2) + xread16(alis.script->vram_org + ALIS_SCR_WCZ);
+@@ -6714,9 +6775,26 @@ static void cwmov(void)
+ }
+ 
+ // Codopname no. 164 opcode 0xa3 cwtstmov
++// START.EXE 0x7248: test the move by a form's centre.
++static void wtstmov(void)
++{
++    u32 a = alis.script->vram_org;
++    tstinv = get_0x03_xinv(a);
++    s16 x = 0, y = 0, z = 0;
++    get_vector(&x, &y, &z);
++    alis.wcx = x + xread16(a + ALIS_SCR_WCX);
++    alis.wcy = y + xread16(a + ALIS_SCR_WCY);
++    alis.wcz = z + xread16(a + ALIS_SCR_WCZ);
++    readexec_opername();
++    alis.matmask = alis.varD7;
++}
++
+ static void cwtstmov(void)
+ {
+-    ALIS_DEBUG(EDebugWarning, "MISSING: %s", __FUNCTION__);
++    wtstmov();
++    alis.wforme = get_0x1a_cforme(alis.script->vram_org);
++    clipform();
++    crstent();
+ }
+ 
+ // v6 dispatch target for cwtstmov
+@@ -6733,7 +6811,11 @@ static void cwtstmov_v6(void)
+ // Codopname no. 165 opcode 0xa4 cwftstmov
+ static void cwftstmov(void)
+ {
+-    ALIS_DEBUG(EDebugWarning, "MISSING: %s", __FUNCTION__);
++    wtstmov();
++    readexec_opername();
++    alis.wforme = alis.varD7;
++    clipform();
++    crstent();
+ }
+ 
+ // v6 dispatch target for cwftstmov
+@@ -6750,6 +6832,7 @@ static void cwftstmov_v6(void)
+ // Codopname no. 166 opcode 0xa5 ctstform
+ static void ctstform(void)
+ {
++    tstinv = get_0x03_xinv(alis.script->vram_org);
+     alis.wcx = xread16(alis.script->vram_org + ALIS_SCR_WCX);
+     alis.wcy = xread16(alis.script->vram_org + ALIS_SCR_WCY);
+     alis.wcz = xread16(alis.script->vram_org + ALIS_SCR_WCZ);
+@@ -9296,6 +9379,7 @@ static void ctexmap(void)
          // Type 1+: sprite-based texture mapping
          readexec_opername();
          xwrite32(entry + 0x10, adresdes(alis.varD7));
@@ -400,7 +572,7 @@ index 1151bed..46c6539 100644
          xwrite16(entry + 0x1c, xread16(alis.script->vram_org - 0xe));
          readexec_opername();
          xwrite16(entry + 0x16, alis.varD7);
-@@ -10988,6 +10989,7 @@ static void cpointpix(void)
+@@ -10988,6 +11072,7 @@ static void cpointpix(void)
      readexec_opername_saveD6();
      
      pointpix(alis.varD7, alis.varD6);
@@ -408,7 +580,7 @@ index 1151bed..46c6539 100644
      
      alis.varD7 = image.cxtstpix;
      cstore_continue();
-@@ -11410,7 +11412,7 @@ static void cclock(void)
+@@ -11410,7 +11495,7 @@ static void cclock(void)
  // Codopname no. 018 opcode 0x11 cret
  static void cret(void)
  {
