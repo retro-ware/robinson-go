@@ -603,11 +603,6 @@ func (v *VM) killent(ent uint16) {
 		v.mem[dsFerase] = 0
 		return
 	}
-	s := v.entscr(ent)
-	if s.data != nil && s.data.header.id == v.aud.musicID {
-		v.sleepUntilMusicStops()
-	}
-
 	v.script = v.entscr(ent)
 	cerasall(v)
 	v.script = v.entscr(v.varD5)
@@ -664,8 +659,6 @@ func (v *VM) shrinkprog(start, length int32, id uint16) {
 		copy(v.mem[start:], v.mem[start+length:int32(v.finprog())])
 	}
 	v.setFinprog(v.finprog() - uint32(length))
-
-	v.audioRelocate(uint32(start), uint32(start+length), -length)
 
 	if id != 0 {
 		idx := -1

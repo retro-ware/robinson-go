@@ -29,11 +29,13 @@ func (v *VM) landBase(a uint32) {
 // buffers are allocated, and the land set up.
 func (v *VM) openland(a uint32) {
 	v.landBase(a)
+	eax := v.ru32(dsGsBase) // 0x472 keeps the gs base in eax; 0xfa29 gets it
 	if v.ru32(a+0x30) == 0 {
 		// 0xbba5 computes the width and drops it: rows of 0x140
 		h := v.memalloc(0x140 * (uint32(v.ru16(a+0x14)+1) + 8))
 		v.wu32(a+0x30, h)
 		v.wu32(h, v.ru32(h)+0x500)
+		eax = h
 	}
 	if v.ru32(0x1aa5c) == 0 {
 		h := v.memalloc(uint32(v.gsu16(0x834))*4 + 0x18b20)
@@ -43,12 +45,13 @@ func (v *VM) openland(a uint32) {
 		v.wu32(0x1aa58, p+0x16800)
 		v.wu32(0x1aa70, p+0x16800+0x320)
 		v.wu32(0x1aa50, p+0x16800+0x320+0x2000)
+		eax = p + 0x16800 + 0x320 + 0x2000
 	}
 	v.wu16(a+0x1a, 0x14)
 	v.wu16(a+0x34, 0)
 	v.wu16(a+0x36, 0)
 	v.wu16(a+0x38, 0)
-	v.landFA29(a)
+	v.landFA29(a, eax)
 	v.landF91C(a)
 	v.landF7E6(a)
 	v.mem[0x1aa74] = 0
@@ -197,12 +200,7 @@ func (v *VM) landPosition(a uint32, di uint16) {
 		}
 		ax += 0x168
 		p := uint32(ax)*uint32(uint16(int16(n))) + 0xb4
-		q := p / 0x168
-		if q > 0xffff {
-			v.fatal("land: division fault (0xc0fa)")
-			return
-		}
-		ax = uint16(q)
+		ax = uint16(p / 0x168) // ax < 0x168 and n < 0x80: it fits
 		if int8(ax) >= n {
 			ax = 0
 		}

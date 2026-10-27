@@ -1,8 +1,6 @@
 package alis
 
-import (
-	"io"
-)
+import "io"
 
 // Palette, sound effect, file, pen and mouse opcodes (alis opcodes.c).
 
@@ -29,68 +27,52 @@ func ctiming(v *VM) {
 	v.ctiming = uint8(v.varD7)
 }
 
-// sound effect parameters common to czap/cexplode/cding/cnoise
-func (v *VM) sfxParams() (pereson, priorson uint8, volson int16, freqson, longson uint16) {
-	pereson = uint8(v.ru16(v.script.vramOrg - 0x0e))
-	v.readexecOpername()
-	priorson = uint8(v.varD7)
-	v.readexecOpername()
-	volson = int16(v.varD7 << 8)
-	v.readexecOpername()
-	freqson = uint16(v.varD7)
-	v.readexecOpername()
-	longson = uint16(v.varD7)
-	return
+// The PSG effects keep their operands in 0x1608d.. and make no sound on
+// the PC: czap and cding call an empty routine (0x922f), cexplode returns
+// after its operands (0x907f), cnoise only reads them (0x944f).
+func (v *VM) psgParams() uint16 {
+	v.wu16(0x1608d, v.ru16(v.script.vramOrg-0xe))
+	v.mem[0x1608f] = uint8(v.getval())
+	v.mem[0x16097] = uint8(v.getval())
+	v.wu16(0x16093, uint16(v.getval()))
+	n := uint16(v.getval())
+	v.wu16(0x16091, n)
+	return n
 }
 
-func sfxDvol(volson int16, longson uint16) int16 {
-	d := uint32(int32(volson)) / uint32(longson)
-	if d == 0 {
-		d = 1
-	}
-	return -int16(d)
-}
-
+// czap is 0x8fe0.
 func czap(v *VM) {
-	pereson, priorson, volson, freqson, longson := v.sfxParams()
-	if longson == 0 {
+	if v.psgParams() == 0 {
 		return
 	}
-	v.readexecOpername()
-	dfreqson := uint16(v.varD7)
-	v.runson(chanDingZap, pereson, priorson, volson, freqson, longson, 0, int16(dfreqson))
+	v.wu16(0x16095, uint16(v.getval()))
+	v.wu16(0x16099, 0)
+	v.mem[0x16090] = 1
 }
 
-func cexplode(v *VM) {
-	pereson, priorson, volson, freqson, longson := v.sfxParams()
-	if longson == 0 {
-		return
-	}
-	v.runson(chanExplode, pereson, priorson, volson, freqson, longson, sfxDvol(volson, longson), 0)
-}
+// cexplode is 0x9042.
+func cexplode(v *VM) { v.psgParams() }
 
+// cding is 0x911d: the volume step is volume*256/length, negated.
 func cding(v *VM) {
-	pereson := uint8(v.ru16(v.script.vramOrg - 0x0e))
-	v.readexecOpername()
-	priorson := uint8(v.varD7)
-	v.readexecOpername()
-	volson := int16(v.varD7 << 8)
-	v.readexecOpername()
-	freqson := uint16(v.varD7 >> 1)
-	v.readexecOpername()
-	longson := uint16(v.varD7)
-	if longson == 0 {
+	n := v.psgParams()
+	if n == 0 {
 		return
 	}
-	v.runson(chanDingZap, pereson, priorson, volson, freqson, longson, sfxDvol(volson, longson), 0)
+	v.wu16(0x16095, 0)
+	ax := uint16(uint32(v.mem[0x16097]) << 8 / uint32(n))
+	if ax == 0 {
+		ax = 1
+	}
+	v.wu16(0x16099, -ax)
+	v.mem[0x16090] = 1
 }
 
+// cnoise is 0x944f.
 func cnoise(v *VM) {
-	pereson, priorson, volson, freqson, longson := v.sfxParams()
-	if longson == 0 {
-		return
+	for range 4 {
+		v.getval()
 	}
-	v.runson(chanNoise, pereson, priorson, volson, freqson, longson, sfxDvol(volson, longson), 0)
 }
 
 // cinitab copies its inline bytes (count-1 of them) to a variable of the

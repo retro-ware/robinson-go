@@ -172,80 +172,45 @@ func (v *VM) scriptInit(name string, data []byte) *scriptData {
 	return s
 }
 
-// convertSamples decodes the packed (Fibonacci delta) samples of a program
-// and applies invdigit.
+// convertSamples is 0x2bf3: it decodes the packed (Fibonacci delta)
+// samples of a packed program. The packed bytes are copied to the work
+// buffer 0x15ee8 and decoded back in place; the length loses 2 bytes and
+// the last two decoded bytes are cleared.
 func (v *VM) convertSamples(s *scriptData) {
+	if s.typ == 0 {
+		return
+	}
 	data := v.mem[s.dataOrg:]
 	l := le32(data[0xe:])
 	samples := int(int16(le16(data[l+0x10:])))
-	for i := 0; i < samples; i++ {
-		a := int32(le32(data[0xc+l:])) + int32(l) + int32(i)*4
-		at := int32(le32(data[a:])) + a
-		if at < 0 || uint32(at) >= s.sz {
+	tab := s.dataOrg + l + le32(data[l+0xc:])
+	for i := range uint32(max(samples, 0)) {
+		e := tab + i*4
+		at := e + v.ru32(e)
+		if t := v.mem[at]; t != 1 && t != 2 || v.mem[at+6] != 1 {
 			continue
 		}
-		sample := data[at:]
-		if sample[0] != 1 && sample[0] != 2 {
-			continue
+		n := (v.ru32(at+2) - 0x10) >> 1
+		buf := v.ru32(0x15ee8)
+		copy(v.mem[buf:buf+n&^1], v.mem[at+0x10:])
+		src, dst := buf, at+0x10
+		d := v.mem[src]
+		v.mem[dst] = d
+		src++
+		dst++
+		for range n - 1 {
+			b := v.mem[src]
+			src++
+			d += uint8(tfibo[b>>4])
+			v.mem[dst] = d
+			d += uint8(tfibo[b&0xf])
+			v.mem[dst+1] = d
+			dst += 2
 		}
-		if sample[6] == 1 && s.typ != 0 {
-			fulllen := le32(sample[2:])
-			length := int32(fulllen-0x10) >> 1
-			temp := make([]byte, max(length, 0)+1)
-			copy(temp, sample[0x10:0x10+max(length, 0)])
-
-			newval := int8(temp[0])
-			p0 := 0x11
-			p2 := p0
-			sample[p2-1] = byte(newval)
-			for k := int32(1); k < length; k++ {
-				p2 = p0
-				newval += tfibo[temp[k]>>4]
-				sample[p2] = byte(newval)
-				newval += tfibo[temp[k]&0xf]
-				sample[p2+1] = byte(newval)
-				p0 = p2 + 2
-			}
-			sample[p2] = 0
-			sample[p2+1] = 0
-
-			fulllen -= 2
-			binary.LittleEndian.PutUint32(sample[2:], fulllen)
-			if sample[0] == 2 {
-				loop := le32(sample[0xc:])
-				if loop != 0 {
-					for k := range uint32(8) {
-						sample[loop+0x10+k] = 0xff
-					}
-				}
-				smplen := fulllen - 0x10
-				if loop != 0 {
-					smplen = fulllen - 8
-				}
-				for k := range uint32(8) {
-					sample[smplen+k] = 0xff
-				}
-			}
-		}
-		invdigit(sample)
+		v.mem[dst-1] = 0
+		v.mem[dst-2] = 0
+		v.wu32(at+2, v.ru32(at+2)-2)
 	}
-}
-
-// invdigit strips the loop header of instruments and terminates the sample.
-func invdigit(sample []byte) {
-	if sample[0] == 2 {
-		if loop := le32(sample[0xc:]); loop != 0 {
-			length := int16(le32(sample[2:]) - loop - 0x21)
-			if length >= 0 {
-				dst := 0x10 + loop
-				copy(sample[dst:dst+uint32(length)], sample[dst+8:dst+8+uint32(length)])
-			}
-			binary.LittleEndian.PutUint32(sample[0xc:], loop-0x10)
-		}
-		binary.LittleEndian.PutUint32(sample[2:], le32(sample[2:])-0x10)
-	}
-	length := le32(sample[2:]) - 0x10
-	sample[0x10+length-1] = 0
 }
 
 // scriptLive creates an entity running prog, linked after the current one

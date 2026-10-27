@@ -113,3 +113,94 @@ Audio still missing (never seen in play):
   although the ISR ticks every 17 ms: palette fades step on every tick and
   waitclock films wait waitclock*50/60 ticks. The Go port copies this
   (timeclockHz); check START.EXE.
+
+## Handover checklist (current work: play2/play6 sessions vs the START.EXE oracle)
+
+Reproduce: `go build -tags orig -o X/origrun ./cmd/origrun`, run from the repo root
+`X/origrun -ms 600000 -frames X/p.orig -input testdata/play2.txt`; the port from orig/cd:
+`rrqharness -data . -maxms 600000 -frames X/p.go -input ../../testdata/play2.txt -save X/h`;
+`cmp` the two frame logs.
+
+- [x] play2 matches the oracle for 120 s (5462 draws).
+- [x] First divergence: draw 12515, tick 14258 = `crunfilm` of socrate.dat (flags 0x203).
+      Script state is identical, so it's rendering only: the port overwrites palette 160..255 and
+      clears the HUD.
+- [x] Read START.EXE's film code: open 0x8e5b (codesc1 6), run 0x13da8, del 0x13d53, inifilm
+      0x13c2f, step 0x13f08, header 0x1412c, frame 0x14164, chunk dispatch 0x14198, palette
+      0x14270, delta 0x14358, black 0x143bc, brun 0x14418, copy 0x14490, audio 0x14211, header
+      clear 0x143d5. Film struct 0x17944: +0 flags, +4 frame, +6 frames, +0x44 result,
+      +0x46 batchframes, +0x48 waitclock, +0x4a basemain, +0x4e file handle.
+      Flags: bit0 = brun skips 0 pixels, black chunk skipped, palette goes through 0x8adf when
+      0x178fb != 0 (set by 0x8871..); bit1 = a 256-colour palette packet sets only 160;
+      bit2 = decode into logic 0x178db and copy it to physic after each frame (else decode into
+      physic 0x178eb); bit3 = clear palette and screen at the header; bits 8..15 = audio
+      channels 0x1000+n. Decoding is always 320 wide at offset 0 (no window, no film width);
+      palette packet indices are absolute; only header 0xaf11 and frame 0xf1fa (others end).
+- [x] Rewrote internal/alis/film.go's decoder after START.EXE (0x178fb = img.fdarkpal, set by
+      cdarkpal 0x87e8; 0x8adf = dpalDarkInto, black→2,2,2 test now signed as in START.EXE).
+      Removed the "150."→"300." film rename (START.EXE opens the name as given).
+- [x] Removed the debug prints. Kept the oracle's film sound hooks (orig/hooks.go 0x109b2/0x109c7:
+      idle while START.EXE busy-waits for the mixer).
+- [x] intro90/start60/walk118 still pass; socrate.dat now draws pixel-identical frames.
+- [x] Film pacing: internal/alis/sb.go models the SB block interrupt (every 0x400 samples at
+      tc 190 = 80640 PIT clocks, first one block after the game timer starts) and the film's
+      mixer channel; the push 0x10941 spins until the mixer takes the block. The "skip the frame
+      wait" flag of 0x14269 lands in the mixer channel (edi was reloaded), so the film always
+      waits for its tick (original bug, kept). Host audio still comes from the alis mixer;
+      the other mixer channels aren't modelled (port 0x10b7e/0x10c71.. when sound must match).
+- [x] play2 and play6 now match the oracle up to the map sprites fatal (draw 13281 / 17815).
+- [x] Map sprites: internal/alis/gfx_map.go ports 0x12c16 (sprite words to 0x1c0fe), type 9
+      textured maps 0x13168 and the texel 0x13411; type 10 draws nothing; tile maps
+      (0x12c69..0x13163) call fatal and are still to port when a session reaches them.
+- [x] Palette: dpalTopalette fades only when dx != 0 and mip (0x16064) > 200 (0x8988/0x21ed);
+      dpalCtopalsav's fdarkpal black test is on the 6-bit values (0x8c8b).
+- [x] cchartmap's clear (0x4f14, ops_chart.go chartClear) reads the script's own position
+      es:[ebp]/es:[ebp+8], not the wcx/wcy work registers. This was the play6 map-screen
+      mismatch at draw 45898.
+- [x] play2 and play6 match the oracle for their whole 1260 s inputs (72035 draws each);
+      intro90/start60/walk118 pass; gofmt and go vet are clean.
+- [x] Golden tests: testdata/play2.orig.frames and play6.orig.frames; harness_test.go runs them
+      only with RRQH_LONG=1 (about 23 s for all five). The default `go test ./...` takes about 3 s.
+- [x] Tile maps ported (gfx_map.go blitTileMap 0x12c69, drawTile 0x12ea1) with the 16-bit
+      `add si,8`/`add di,dx` quirks and cells read at 0x10000|low16. They are UNTESTED, and probably dead
+      in this game: a bytecode scan finds cdefmap only in MAIN.IO, with types 10 and 9.
+- [x] Sound rewrite: START.EXE's DOS sound system now lives in v.mem at its DS addresses.
+      sb.go covers init 0x107cf/0x10c93/0x10d6b, the IRQ 0x10edb, mix 0x10ac1/0x10b7e,
+      start/stop/alloc and the film channel/push. ops_snd.go covers csound, cmsound, cinstru,
+      cmusic, cdelsound and csetvolum. The ops_io beeps (czap and so on) only store their
+      operands, as on DOS. audio.go resamples the 15 kHz blocks for the host. The old alis
+      mixer and music_v2.go were removed, along with their difftest cases.
+- [x] Verification: run origrun/rrqharness with -sblog. For play2 and play6 (120 s), every
+      block's end time and CRC matches the oracle once the oracle's times are measured from its
+      game timer start (oracle t 9895213 = port t 0). The oracle logs 3 extra silent blocks
+      first. Two of them come from the IRQ 5/7 probe (0x11097), which runs before the timer is
+      installed. The third plays from t 0 and the port doesn't log it. The oracle's 8 s before
+      that are the DOS loader stub. So audio timing is exact, and nothing needed fixing.
+      Frame goldens still pass.
+- [x] Module player ported (music.go, 0x1158e..0x123e7: start/play/fade/stop, tick, rows,
+      effects, retrigger, funk). The AdLib path 0x1194a is dead (no type-6 instruments) and
+      calls fatal. Verified with a test data dir whose LOGOSND.IO is MUSIQUES.IO (or
+      MUSIQUE2.IO) stored unpacked with id 0x89, so MAIN plays it at once: MUSIQUES matches
+      for all 3550 blocks (240 s), MUSIQUE2 for 448 blocks until the oracle crashes there
+      (flags.IO overwrites the samples in that setup, a test artefact). Stored format:
+      le32 len+6, bytes 01 00, data.
+- [x] convertSamples follows 0x2bf3: only packed type 1/2 samples with byte 6 == 1, the
+      packed bytes copied to [0x15ee8] and Fibonacci-decoded in place, the last two bytes
+      zeroed and the length cut by 2.
+- [x] Films: chunk 0x10 copies 64000 bytes whatever its size (0x14490); the palette waits
+      for the retrace (0x1433b calls 0x1371d, clock.go waitRetrace on the VGA dot clock).
+- [x] Film streaming (film.go): copenfilm's films stream through a VM-memory buffer
+      (inifilm 0x13c2f, open/step 0x13f08, refill 0x13fd0, header 0x1412c, del 0x13d53),
+      reading cdspeed*waitclock/0x4da3 - 1/8 bytes per frame; a frame not read in time ends
+      the film (intro24d.dat ends at frame 138 of 301 as in the oracle). The CD speed
+      [0x18abc] is 9000000 as the oracle measures it (core.go). cfilm leaks the handle and
+      buffer as 0x8e13 does.
+- [x] Intro session testdata/intro.txt (UK flag clicked at 60 s, mouse 110 140; FLI intro
+      after it). Frames match the oracle for 600 s (golden testdata/intro.orig.frames, long
+      test) and every SB block matches. origrun has -cd DIR for alternative data dirs.
+- [x] omod/odiv follow 0xa305/0xa31f: a 16-bit idiv with a zero divisor taken as 1 (D6
+      gets the divisor). Only -32768 / -1, which traps on x86, still calls fatal.
+- [x] operAX (cscfollow's last operand, gfx_scene.go) covers every operand form; oeval
+      (0x38) always leaves 0x3a, the code of the ofin (0xa767) that ends its loop.
+      Table forms take ax from tabint/tabstring's last term (tabAX, 0xa0f3/0xa199).
+- [ ] Nothing is committed yet (branch port-wip).

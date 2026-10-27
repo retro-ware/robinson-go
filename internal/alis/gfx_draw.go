@@ -547,14 +547,11 @@ func shl32(x int16, n uint) uint32 {
 	return uint32(int32(x)) << n
 }
 
-// idiv16 is idiv word: the quotient must fit in 16 bits.
+// idiv16 is idiv word [0x15ea6] of dx:ax (0x5990, 0x59aa), with the
+// divide error handler's retries (see xdiv).
 func (v *VM) idiv16(n uint32, d int16) int16 {
-	q := int64(int32(n)) / int64(d)
-	if q < -0x8000 || q > 0x7fff {
-		v.fatal("draw: divide overflow in START.EXE 0x587a")
-		return 0
-	}
-	return int16(q)
+	eax, _ := v.xdiv(DivSigned|DivWord|DivRM4, n>>16, n, uint32(uint16(d)))
+	return int16(eax)
 }
 
 // project is 0x5b2b: by the scene's matrix if sc[1] < 0, else x stays,

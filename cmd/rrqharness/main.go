@@ -173,6 +173,7 @@ func main() {
 	input := flag.String("input", "", "input script (C harness ALIS_INPUT format)")
 	wav := flag.String("wav", "", "write the mixed audio as WAV (C harness ALIS_WAV)")
 	save := flag.String("save", "", "directory for files the game writes (C harness ALIS_SAVEDIR; default: the data directory)")
+	sbLog := flag.String("sblog", "", "log the end tick and CRC of every Sound Blaster block (as origrun -sblog)")
 	frames := flag.String("frames", "", "log tick, screen and palette CRC at every draw (as origrun -frames)")
 	raw := flag.String("raw", "", "write the screen and palette at draw -rawdraw to this file (as origrun -raw)")
 	rawDraw := flag.Int("rawdraw", 0, "draw for -raw")
@@ -241,6 +242,20 @@ func main() {
 		fw = bufio.NewWriter(f)
 		defer f.Close()
 		defer fw.Flush()
+	}
+	if *sbLog != "" {
+		f, err := os.Create(*sbLog)
+		if err != nil {
+			log.Fatal(err)
+		}
+		w := bufio.NewWriter(f)
+		defer f.Close()
+		defer w.Flush()
+		i := 0
+		vm.SBLog(func(end uint64, b []byte) {
+			fmt.Fprintf(w, "block %d t %d rate %d n %d crc %08x\n", i, end, 15151, len(b), crc32.ChecksumIEEE(b))
+			i++
+		})
 	}
 	n := 0
 	vm.OnDraw = func() {

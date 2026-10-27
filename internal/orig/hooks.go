@@ -67,6 +67,18 @@ func (m *Machine) installHooks() error {
 				m.idle()
 			}
 		},
+		// film sound: wait for the mixer to take up a channel, then for
+		// it to take the queued block
+		0x109b2: func() {
+			if m.D8(m.e.reg(rEDI)) == 1 {
+				m.idle()
+			}
+		},
+		0x109c7: func() {
+			if m.D16(m.e.reg(rEDI)+8) == 2 {
+				m.idle()
+			}
+		},
 		// wait for the next tick
 		0x1166c: func() {
 			if m.e.reg(rEAX) == m.D32(0x16058) {

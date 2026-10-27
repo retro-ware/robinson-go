@@ -29,37 +29,6 @@ func cfindcla(v *VM) {
 	crstent(v)
 }
 
-func (v *VM) instru() {
-	v.readexecOpername()
-	tabidx := int16(v.varD7)
-	v.readexecOpername()
-	scridx := int16(v.varD7)
-	v.readexecOpername()
-	instidx := int16(v.varD7)
-	var addr int32
-	if scridx < 0 {
-		instidx = 0
-	} else {
-		addr = v.adresmus(int32(scridx))
-		if t := v.mem[addr]; t != 1 && t != 2 && t != 5 && t != 6 {
-			return
-		}
-		addr += 0x10
-	}
-	v.aud.tabinst[tabidx].address = uint32(addr)
-	v.aud.tabinst[tabidx].unknown = uint32(int32(instidx))
-}
-
-func cinstru(v *VM) {
-	v.mem[dsFlagmain] = 0
-	v.instru()
-}
-
-func cminstru(v *VM) {
-	v.mem[dsFlagmain] = 1
-	v.instru()
-}
-
 func cordspr(v *VM) {
 	v.readexecOpername()
 	v.mem[v.script.vramOrg-0x2b] = uint8(v.varD7)
@@ -112,10 +81,8 @@ func cstarring(v *VM) {
 // cengine takes no operands on the PC.
 func cengine(v *VM) {}
 
-func cquality(v *VM) {
-	v.readexecOpername()
-	v.vquality = uint16(v.varD7)
-}
+// cquality (0x95bb) only reads its operand.
+func cquality(v *VM) { v.getval() }
 
 func chsprite(v *VM) {
 	v.readexecOpername()
@@ -149,3 +116,27 @@ func cblast(v *VM) {
 	v.mem[dsFerase] = 1
 	ckill(v)
 }
+
+func cxinv(v *VM)    { v.mem[v.script.vramOrg-3] ^= 1 }
+func cxinvon(v *VM)  { v.mem[v.script.vramOrg-3] = 1 }
+func cxinvoff(v *VM) { v.mem[v.script.vramOrg-3] = 0 }
+
+func clistent(v *VM) {
+	ent := int16(0)
+	idx := 0
+	for {
+		ent = v.r16(v.atent + 4 + uint32(int32(ent)))
+		if ent == 0 || tabentFull(idx) {
+			break
+		}
+		v.matent[idx] = 0
+		v.tablent[idx] = ent
+		idx++
+	}
+	v.tablent[idx] = -1
+	v.fallent = 0
+	crstent(v)
+}
+
+func credon(v *VM)  { v.mem[v.script.vramOrg-0x25] = 0 }
+func credoff(v *VM) { v.mem[v.script.vramOrg-0x25] = 0x80 }

@@ -72,13 +72,9 @@ func (v *VM) Err() error {
 
 func (v *VM) init() {
 	v.initClock()
-	v.cdspeed = 0x493e0
 	v.pays = 0
 
 	v.timeclock = 0
-	v.aud.fsound = 1
-	v.aud.fmusic = 1
-	v.aud.musicID = 0xffff
 	v.restartLoop = false
 	v.automode = 0
 	v.theconfig = 0x40 // fast CD (START.EXE 0x330b); initInput adds the mouse
@@ -96,10 +92,14 @@ func (v *VM) init() {
 		return
 	}
 	v.setFinmem(memTop) // 0x15f26
+	// the CD speed START.EXE 0x3270 measures, as the oracle's CD reads
+	// it at startup (the films stream at this rate)
+	v.wu32(dsCDSpeed, 9000000)
 	v.wu32(0x15f2a, memTop)
 	v.wu32(0x15f22, progBase-gameWidth*gameHeight)
 	v.initScreens()
 	v.wu32(0x15f22, progBase)
+	v.sbInit()     // 0x1bd4
 	v.landTables() // 0x1bf7
 
 	v.fswitch = 1 // dbl_buf
@@ -115,6 +115,8 @@ func (v *VM) init() {
 	v.ptrent = 0
 	v.ctiming = 0
 	v.varD6, v.varD7 = 0, 0
+	v.mem[dsFmusic] = 1 // 0x37b5
+	v.mem[dsFsound] = 1
 
 	// string registers (0x377f) and the standard vectors (corient 0x6056)
 	v.bsd7 = 0x15b8e
@@ -516,7 +518,6 @@ func (v *VM) Run() (err error) {
 			v.draw()
 		}
 	}
-	v.sleepUntilMusicStopsAtExit()
 	return v.Err()
 }
 
@@ -581,9 +582,11 @@ func (v *VM) adresmus(idx int32) int32 {
 }
 
 // tabint/tabchar/tabstring resolve an array cell; the extra dimension
-// indices are popped from the accumulator.
+// indices are popped from the accumulator. tabint and tabstring keep the low
+// word of their last term in tabAX, as ax after 0xa0f3 and 0xa199.
 func (v *VM) tabint(addr uint32) int32 {
 	result := int32(addr) + v.varD7*2
+	v.tabAX = int16(v.varD7 * 2)
 	addr--
 	length := int8(v.r8(addr))
 	addr--
@@ -594,13 +597,17 @@ func (v *VM) tabint(addr uint32) int32 {
 		length &= 0xf
 		for i := int8(0); i < length; i++ {
 			addr -= 4
-			result += v.r32(addr) * v.pop()
+			t := v.r32(addr) * v.pop()
+			result += t
+			v.tabAX = int16(t)
 		}
 	} else {
 		length &= 0xf
 		for i := int8(0); i < length; i++ {
 			addr -= 2
-			result += int32(v.ru16(addr)) * v.pop()
+			t := int32(v.ru16(addr)) * v.pop()
+			result += t
+			v.tabAX = int16(t)
 		}
 	}
 	return result
@@ -636,20 +643,26 @@ func (v *VM) tabstring(addr uint32) int32 {
 	length := int8(v.r8(addr))
 	addr--
 	result += v.varD7 * int32(v.r8(addr))
+	v.tabAX = int16(v.varD7 * int32(v.r8(addr)))
 	if length < 0 {
 		na := uint32(v.r32(addr + 2))
 		na = uint32(v.r32(na))
 		result = int32(na) + v.varD7*int32(v.r8(addr+1))
+		v.tabAX = int16(v.varD7 * int32(v.r8(addr+1)))
 		length &= 0xf
 		for i := int8(0); i < length; i++ {
 			addr -= 4
-			result += v.r32(addr) * v.pop()
+			t := v.r32(addr) * v.pop()
+			result += t
+			v.tabAX = int16(t)
 		}
 	} else {
 		length &= 0xf
 		for i := int8(0); i < length; i++ {
 			addr -= 2
-			result += int32(v.ru16(addr)) * v.pop()
+			t := int32(v.ru16(addr)) * v.pop()
+			result += t
+			v.tabAX = int16(t)
 		}
 	}
 	return result

@@ -304,6 +304,9 @@ func (m *Machine) D16(off uint32) uint16 { return m.r16(ds(off)) }
 func (m *Machine) D32(off uint32) uint32 { return m.r32(ds(off)) }
 
 // Ms is the virtual time in ms.
+// SBBlocks are the Sound Blaster blocks played so far.
+func (m *Machine) SBBlocks() []SBBlock { return m.sb.Blocks }
+
 func (m *Machine) Ms() float64 { return m.clk.ms() }
 
 // Prog is the program's memory by DS offset.

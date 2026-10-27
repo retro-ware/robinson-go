@@ -51,12 +51,13 @@ func cdefmap(v *VM) {
 	} else {
 		w, n = uint32(v.ru16(m-4)), uint32(v.ru16(m-6))
 	}
-	if w == 0 || int32(n) < 0 { // cdq: a negative size overflows div
-		v.fatal("cdefmap: division fault")
+	// cdq; div ecx: a negative size faults and 0x20d9 shifts edx:eax
+	q, _ := v.xdiv(0, uint32(int32(n)>>31), n, w)
+	if v.err != nil {
 		return
 	}
-	v.wu16(m-0x3c6, uint16(n/w))
-	v.wu16(m-0x3cc, uint16(n/w))
+	v.wu16(m-0x3c6, uint16(q))
+	v.wu16(m-0x3cc, uint16(q))
 	v.wu16(m-0x3c4, uint16(w))
 	v.wu16(m-0x3ca, uint16(w)>>1)
 	v.wu16(v.script.vramOrg-0x3b6, 0)
@@ -95,7 +96,7 @@ func cputmap(v *VM) {
 	v.w16(dsNumelem, v.getval())
 	w := v.ru16(m - 0x3f0)
 	if w == 0 {
-		v.fatal("cputmap: division by zero")
+		v.fatal("cputmap: division by zero at 0x4bab; START.EXE retries it for ever")
 		return
 	}
 	v.wu16(m-0x3d2, v.ru16(m-0x3de)%w)

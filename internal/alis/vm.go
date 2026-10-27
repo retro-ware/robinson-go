@@ -174,6 +174,7 @@ type VM struct {
 	// the last operand routine and where its operands start (operAX)
 	operCode uint8
 	operPC   uint32
+	tabAX    int16 // ax after the last word table index (0xa0f3)
 
 	// string registers (offsets in mem)
 	bsd7, bsd6, bsd7bis uint32
@@ -217,8 +218,6 @@ type VM struct {
 	fp       File
 	openmode uint16
 
-	vquality uint16
-
 	fswitch      uint8
 	ctiming      uint8
 	cstopret     uint8
@@ -230,11 +229,8 @@ type VM struct {
 	basedark uint16
 	ptrdark  uint32
 
-	cdspeed uint32
-
 	img      image
-	aud      audioState
-	mv2      mv2State
+	sb       sbState
 	film     film
 	filmnode uint16
 

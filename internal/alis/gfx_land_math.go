@@ -40,13 +40,88 @@ func posDiv(a, b int16) int32 {
 	return 1
 }
 
-// idiv16 is idiv r/m16 on dx:ax; a quotient outside 16 bits faults.
-func (v *VM) idiv32by16(n int32, d int16) int16 {
-	if d == 0 || n/int32(d) > 0x7fff || n/int32(d) < -0x8000 {
-		v.fatal("land: division fault")
-		return 0
+// The divide error: START.EXE hooks interrupt 0 (0x2045 installs 0x20d9).
+// The handler shifts the dividend right by 2 and returns to the division,
+// which runs again until its quotient fits. With bit 2 of the ModRM byte
+// clear (idiv bx/cx/ebx/ecx, div bx/cx) all of edx:eax shifts, logically;
+// with it set (memory operands, si, di, bp) only dx:ax, arithmetically,
+// also for div. A division by zero faults for ever: the original hangs.
+const (
+	DivSigned = 1 << iota // idiv
+	DivWord               // dx:ax by a word
+	DivRM4                // ModRM bit 2 set
+)
+
+// xdiv is the division of kind k of edx:eax (dx:ax with DivWord) by d,
+// with 0x20d9's retries; it returns eax and edx afterwards.
+func (v *VM) xdiv(k int, edx, eax, d uint32) (uint32, uint32) {
+	eax, edx, ok := DivRetry(k, edx, eax, d)
+	if !ok {
+		v.fatal("division by zero: START.EXE's divide error handler 0x20d9 retries it for ever")
 	}
-	return int16(n / int32(d))
+	return eax, edx
+}
+
+// DivRetry is xdiv without the VM (the oracle's tests check it against
+// 0x20d9): eax and edx afterwards, false when the division never fits.
+func DivRetry(k int, edx, eax, d uint32) (uint32, uint32, bool) {
+	for range 64 {
+		if q, r, ok := div1(k, edx, eax, d); ok {
+			return q, r, true
+		}
+		if k&DivRM4 == 0 {
+			x := (uint64(edx)<<32 | uint64(eax)) >> 2
+			edx, eax = uint32(x>>32), uint32(x)
+		} else {
+			x := uint32(int32(edx<<16|eax&0xffff) >> 2)
+			edx = edx&^0xffff | x>>16
+			eax = eax&^0xffff | x&0xffff
+		}
+	}
+	return 0, 0, false
+}
+
+// div1 is one try of the division; false when it faults.
+func div1(k int, edx, eax, d uint32) (uint32, uint32, bool) {
+	switch k &^ DivRM4 {
+	case DivSigned | DivWord:
+		n, dd := int32(edx<<16|eax&0xffff), int32(int16(d))
+		if dd == 0 || n/dd != int32(int16(n/dd)) {
+			return 0, 0, false
+		}
+		return eax&^0xffff | uint32(uint16(n/dd)), edx&^0xffff | uint32(uint16(n%dd)), true
+	case DivWord:
+		n, dd := edx<<16|eax&0xffff, d&0xffff
+		if dd == 0 || n/dd > 0xffff {
+			return 0, 0, false
+		}
+		return eax&^0xffff | n/dd, edx&^0xffff | n%dd, true
+	case DivSigned:
+		n, dd := int64(uint64(edx)<<32|uint64(eax)), int64(int32(d))
+		if dd == 0 || n/dd != int64(int32(n/dd)) {
+			return 0, 0, false
+		}
+		return uint32(n / dd), uint32(n % dd), true
+	}
+	n, dd := uint64(edx)<<32|uint64(eax), uint64(d)
+	if dd == 0 || n/dd > 0xffffffff {
+		return 0, 0, false
+	}
+	return uint32(n / dd), uint32(n % dd), true
+}
+
+// idivRol is "mov edx,eax; rol edx,16; idiv r16" (ModRM bit 2 clear): n
+// both in eax and, word-swapped, in edx.
+func (v *VM) idivRol(n int32, d int16) int16 {
+	eax, _ := v.xdiv(DivSigned|DivWord, rol16(uint32(n)), uint32(n), uint32(uint16(d)))
+	return int16(eax)
+}
+
+// idivMem is idiv of dx:ax by a memory word (ModRM bit 2 set), where the
+// upper halves of eax and edx don't matter.
+func (v *VM) idivMem(n int32, d int16) int16 {
+	eax, _ := v.xdiv(DivSigned|DivWord|DivRM4, uint32(n)>>16, uint32(n), uint32(uint16(d)))
+	return int16(eax)
 }
 
 // landRot is 0xc8be: (ax, bx) turned by the camera's heading around the
@@ -109,23 +184,30 @@ func (v *VM) landProj(a uint32, ax, bx, cx int16) landProj {
 
 // landPersp is 0xcab9: the screen column of map point (ax, bx) at depth
 // cx by the land's lens (gs 0x854..0x85a), and the scale at that depth.
-func (v *VM) landPersp(ax, bx, cx int16) (int16, int16) {
+// eax is the caller's: its upper half reaches the divisions' retries.
+func (v *VM) landPersp(eax uint32, ax, bx, cx int16) (int16, int16) {
 	r := (mul16(bx, v.gs16(0x970)) + mul16(ax, v.gs16(0x972))) >> 9
-	col := v.idiv32by16(mul16(v.gs16(0x856), int16(r)), cx+v.gs16(0x854))
-	scale := v.idiv32by16(int32(v.gs16(0x85a))<<8, cx+v.gs16(0x858))
-	return col, scale
+	p := uint32(mul16(v.gs16(0x856), int16(r)))
+	eax, _ = v.xdiv(DivSigned|DivWord, rol16(p), eax&^0xffff|p&0xffff, uint32(uint16(cx+v.gs16(0x854))))
+	col := int16(eax)
+	n := uint32(int32(v.gs16(0x85a)) << 8)
+	eax, _ = v.xdiv(DivSigned|DivWord, rol16(n), eax&^0xffff|n&0xffff, uint32(uint16(cx+v.gs16(0x858))))
+	return col, int16(eax)
 }
 
 // landPersp2 is 0xcb2c: the screen columns of (ax, bx) and (cx, dx) at
-// depth di.
-func (v *VM) landPersp2(ax, bx, cx, dx, di int16) (int16, int16) {
+// depth di; eax as for landPersp.
+func (v *VM) landPersp2(eax uint32, ax, bx, cx, dx, di int16) (int16, int16) {
 	c, s := v.gs16(0x972), v.gs16(0x970)
 	bp := (mul16(ax, c) + mul16(bx, s)) >> 9
 	b := (mul16(cx, c) + mul16(dx, s)) >> 9
-	d := di + v.gs16(0x854)
-	q2 := v.idiv32by16(mul16(v.gs16(0x856), int16(b)), d)
-	q1 := v.idiv32by16(mul16(v.gs16(0x856), int16(bp)), d)
-	return q1, q2
+	d := uint32(uint16(di + v.gs16(0x854)))
+	p := uint32(mul16(v.gs16(0x856), int16(b)))
+	eax, _ = v.xdiv(DivSigned|DivWord, rol16(p), eax&^0xffff|p&0xffff, d)
+	q2 := int16(eax)
+	p = uint32(mul16(v.gs16(0x856), int16(bp)))
+	eax, _ = v.xdiv(DivSigned|DivWord, rol16(p), eax&^0xffff|p&0xffff, d)
+	return int16(eax), q2
 }
 
 // landPersp3 is 0xcbc6: as 0xcb2c, but at the depth of (ax, bx) itself,
@@ -137,7 +219,7 @@ func (v *VM) landPersp3(ax, bx, cx, dx int16) (x1, x2, depth int16) {
 	b := (mul16(cx, c) + mul16(dx, s)) >> 9
 	d := int32(int16(edi) + v.gs16(0x854))
 	if d == 0 {
-		v.fatal("land: division by zero (0xcc78)")
+		v.fatal("land: division by zero at 0xcc78; START.EXE retries it for ever")
 		return
 	}
 	x2 = clamp16(mul16(v.gs16(0x856), int16(b)) / d)
@@ -151,27 +233,24 @@ func (v *VM) landUnproj(ax, bx, cx int16) (int16, int16, int16) {
 	c, s := v.gs16(0x972), v.gs16(0x970)
 	x := ax - v.gs16(0x990)
 	r := mul16(x, c) >> 9
-	px := v.idiv32by16(mul16(cx+v.gs16(0x854), int16(r)), v.gs16(0x856))
+	px := v.idivMem(mul16(cx+v.gs16(0x854), int16(r)), v.gs16(0x856))
 	px -= int16(mul16(cx, s) >> 9)
 	px += v.gs16(0x994)
 	r = mul16(x, s) >> 9
-	py := v.idiv32by16(mul16(cx+v.gs16(0x854), int16(r)), v.gs16(0x856))
+	py := v.idivMem(mul16(cx+v.gs16(0x854), int16(r)), v.gs16(0x856))
 	py += int16(mul16(cx, c) >> 9)
 	py += v.gs16(0x996)
 	y := -bx + v.gs16(0x992)
-	pz := v.idiv32by16(mul16(cx+v.gs16(0x858), y), v.gs16(0x85a))
+	pz := v.idivMem(mul16(cx+v.gs16(0x858), y), v.gs16(0x85a))
 	pz += int16(mul16(cx, v.gs16(0x96c)) >> 9)
 	pz += v.gs16(0x998)
 	return px, py, pz
 }
 
-// idiv32 is cdq; idiv r32.
+// idiv32 is "cdq; idiv ebx/ecx".
 func (v *VM) idiv32(n, d int32) int32 {
-	if d == 0 || n == -0x80000000 && d == -1 {
-		v.fatal("land: division fault")
-		return 0
-	}
-	return n / d
+	eax, _ := v.xdiv(DivSigned, uint32(n>>31), uint32(n), uint32(d))
+	return int32(eax)
 }
 
 func abs16(x int16) int16 {
@@ -228,7 +307,7 @@ func (v *VM) landF445(a uint32) {
 	v.setGs32(0x948, uint32(t))
 	v.setGs32(0x95c, unitSign(s < 0))
 	v.setGs32(0x960, unitSign(t < 0))
-	q := v.idiv32by16(int32(v.gs16(0x952)-v.gs16(0x950))<<8, -0x24a)
+	q := v.idivRol(int32(v.gs16(0x952)-v.gs16(0x950))<<8, -0x24a)
 	v.setGs32(0x94c, uint32(int32(q)<<8>>cl))
 
 	v.setGs32(0x9b2, 0)
@@ -283,7 +362,7 @@ func (v *VM) landF7E6(a uint32) {
 	edi <<= 8
 	for range 0xb3 {
 		cx := int16(ebp>>16) + v.gs16(0x858)
-		q := int32(v.idiv32by16(int32(eax), cx)) << 8
+		q := int32(v.idivRol(int32(eax), cx)) << 8
 		v.wu16(esi, 0x4e20)
 		esi += 2
 		edx := q
@@ -299,10 +378,8 @@ func (v *VM) landF7E6(a uint32) {
 		v.wu16(esi, 0x4e20)
 		esi += 2
 	}
-	// 0xf8d9 computes the sky's scroll and stores cx, 0x168
-	q := v.idiv32by16(mul16(int16(mul16(0x648/0x168, m)), 0x168), 0x140)
-	q = int16(uint16(q+0x80) & 0xff00)
-	v.idiv32by16(mul16(q, 0x140), 0x168)
+	// 0xf8d9 computes a scroll from +0x6c and drops it (a fault there only
+	// shifts the dropped quotient); only cx, 0x168, is stored
 	v.wu16(0x1aabc, 0x168)
 }
 
@@ -349,15 +426,19 @@ func (v *VM) landF91C(a uint32) {
 }
 
 // landFA29 is 0xfa29 (openland): the lens of the scene from its view
-// (+0x64..+0x6e) and size.
-func (v *VM) landFA29(a uint32) {
+// (+0x64..+0x6e) and size. eax is the caller's: its upper half and the
+// divisions' reach their retries.
+func (v *VM) landFA29(a, eax uint32) {
 	v.w16(a+0x94, v.r16(a+0x6c)-2*v.gs16(0x80e))
 	v.w16(a+0x92, v.r16(a+0x66)>>2)
 	lens := func(n0, n1, d0, d1, size uint32) (int16, int16) {
 		e := uint32(v.ru16(a+0x6c))*uint32(v.ru16(a+n0)) - uint32(v.ru16(a+0x66))*uint32(v.ru16(a+n1))
-		f := v.idiv32by16(int32(e), v.r16(a+d1)-v.r16(a+d0))
-		g := v.idiv32by16(mul16(v.r16(a+0x6c)+f, v.r16(a+size)+1), v.r16(a+d1))
-		return f, g
+		var edx uint32
+		eax, edx = v.xdiv(DivSigned|DivWord, rol16(e), eax&^0xffff|e&0xffff, uint32(v.ru16(a+d1)-v.ru16(a+d0)))
+		f := int16(eax)
+		p := uint32(mul16(v.r16(a+0x6c)+f, v.r16(a+size)+1))
+		eax, _ = v.xdiv(DivSigned|DivWord, edx&^0xffff|p>>16, eax&^0xffff|p&0xffff, uint32(v.ru16(a+d1)))
+		return f, int16(eax)
 	}
 	f, g := lens(0x64, 0x6a, 0x64, 0x6a, 0x12)
 	v.w16(a+0x70, f)
@@ -369,5 +450,5 @@ func (v *VM) landFA29(a uint32) {
 	v.setGs16(0x856, v.r16(a+0x76))
 	v.setGs16(0x858, v.r16(a+0x74))
 	v.setGs16(0x85a, v.r16(a+0x7a))
-	v.setGs16(0x85c, v.idiv32by16(int32(v.r16(a+0x6a)), v.gs16(0x80c)))
+	v.setGs16(0x85c, v.idivMem(int32(v.r16(a+0x6a)), v.gs16(0x80c)))
 }

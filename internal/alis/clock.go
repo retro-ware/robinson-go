@@ -20,6 +20,7 @@ func usToClk(us uint64) uint64 { return (us*pitHz + 999999) / 1000000 }
 type clock struct {
 	now                uint64 // PIT clocks
 	nextTick           uint64
+	nextSB             uint64 // Sound Blaster block interrupt
 	nAudio, nSmp       uint64 // 20 ms periods done
 	nextAudio, nextSmp uint64
 	argb               []uint32
@@ -29,6 +30,7 @@ type clock struct {
 func (v *VM) initClock() {
 	c := &v.clk
 	c.nextTick = tickClocks
+	c.nextSB = sbBlockClocks
 	c.nAudio, c.nSmp = 1, 1
 	c.nextAudio, c.nextSmp = usToClk(audioUs), usToClk(sampleUs)
 	c.argb = make([]uint32, gameWidth*gameHeight)
@@ -51,7 +53,7 @@ func (v *VM) pollInput() { v.host.PollInput(v.Now(), &v.in) }
 func (v *VM) advanceTo(target uint64) {
 	c := &v.clk
 	for {
-		nxt := min(target, c.nextTick, c.nextAudio, c.nextSmp)
+		nxt := min(target, c.nextTick, c.nextSB, c.nextAudio, c.nextSmp)
 		if ev, ok := v.host.(EventHost); ok {
 			if at, ok := ev.NextEventUs(); ok && usToClk(at) < nxt {
 				nxt = max(usToClk(at), c.now)
@@ -70,6 +72,10 @@ func (v *VM) advanceTo(target uint64) {
 		if c.now >= c.nextTick {
 			v.itroutine()
 			c.nextTick += tickClocks
+		}
+		if c.now >= c.nextSB {
+			v.sbIRQ()
+			c.nextSB += sbBlockClocks
 		}
 		if c.now >= c.nextAudio {
 			v.mixAudio(c.pcm)
@@ -122,6 +128,58 @@ func (v *VM) sleep(us uint64) { v.advanceTo(v.clk.now + usToClk(us)) }
 // waitTick waits for the next game timer tick, as the original's wait
 // loops spin until the timer handler has run.
 func (v *VM) waitTick() { v.advanceTo(v.clk.nextTick) }
+
+// The VGA's 70 Hz frame as the oracle times it: 25.175 MHz dots, 800 per
+// line, 449 lines, vertical retrace on lines 412 and 413. vgaPhase is the
+// oracle's clock (from machine start) at our time 0, when START.EXE starts
+// the game timer.
+const (
+	vgaDotHz = 25175000
+	vgaLineD = 800
+	vgaFrame = vgaLineD * 449
+	vgaPhase = 9895213
+)
+
+func vgaDots(t uint64) uint64 { return t * vgaDotHz / pitHz }
+
+// nextRetraceEdge is the first time after t (oracle clock) where the
+// retrace bit changes.
+func nextRetraceEdge(t uint64) uint64 {
+	d := vgaDots(t)
+	frame := d / vgaFrame * vgaFrame
+	var target uint64
+	switch line := d % vgaFrame / vgaLineD; {
+	case line < 412:
+		target = frame + 412*vgaLineD
+	case line < 414:
+		target = frame + 414*vgaLineD
+	default:
+		target = frame + vgaFrame + 412*vgaLineD
+	}
+	nt := (target*pitHz + vgaDotHz - 1) / vgaDotHz
+	for vgaDots(nt) < target {
+		nt++
+	}
+	return max(nt, t+1)
+}
+
+func inRetrace(t uint64) bool {
+	line := vgaDots(t) % vgaFrame / vgaLineD
+	return line >= 412 && line < 414
+}
+
+// waitRetrace is 0x1371d: it waits for the end of a retrace in progress,
+// then for the start of the next one.
+func (v *VM) waitRetrace() {
+	t := v.clk.now + vgaPhase
+	if inRetrace(t) {
+		t = nextRetraceEdge(t)
+	}
+	v.advanceTo(nextRetraceEdge(t) - vgaPhase)
+}
+
+// waitSB waits for the next Sound Blaster block interrupt.
+func (v *VM) waitSB() { v.advanceTo(v.clk.nextSB) }
 
 // delayFrame is the frame wait of draw (0x6340): until ctiming ticks have
 // passed since the last draw.

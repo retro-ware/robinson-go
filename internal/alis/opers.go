@@ -194,25 +194,30 @@ func osub(v *VM) {
 	v.varD7 = v.varD6
 }
 
-func omod(v *VM) {
+// odivide is omod (START.EXE 0xa305) and odiv (0xa31f): a 16-bit idiv of
+// D6 by D7, with a zero divisor taken as 1. Afterwards cx
+// (D6) gets the divisor, dx (D7) the remainder or the quotient, both kept
+// sign-extended like the other operators.
+func (v *VM) odivide(quot bool) {
 	v.readexecOpernameSaveD7()
-	if v.varD7 == 0 {
-		v.fatal("division by zero (omod)") // TODO: x86 idiv traps; check START.EXE
+	a, d := int16(v.varD6), int16(v.varD7)
+	if d == 0 {
+		d = 1
+	}
+	if a == -0x8000 && d == -1 {
+		v.fatal("omod/odiv: -32768 / -1 overflows idiv (START.EXE 0xa31b)")
 		return
 	}
-	v.varD6 %= v.varD7
-	v.varD7 = v.varD6
+	r := a % d
+	if quot {
+		r = a / d
+	}
+	v.varD6 = int32(d)
+	v.varD7 = int32(r)
 }
 
-func odiv(v *VM) {
-	v.readexecOpernameSaveD7()
-	if v.varD7 == 0 {
-		v.fatal("division by zero (odiv)") // TODO: x86 idiv traps; check START.EXE
-		return
-	}
-	v.varD6 /= v.varD7
-	v.varD7 = v.varD6
-}
+func omod(v *VM) { v.odivide(false) }
+func odiv(v *VM) { v.odivide(true) }
 
 func omul(v *VM) {
 	v.readexecOpernameSaveD7()

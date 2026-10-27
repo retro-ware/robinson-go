@@ -110,8 +110,11 @@ func (v *VM) landSky(a uint32) {
 	ax := int16(uint16(p>>8)&0xff | uint16(p>>16)<<8)
 	ax -= v.r16(dsFenx1)
 	bx := int16(v.ru16(esi+2) + 1)
-	if bx == 0 || int32(ax)/int32(bx) > 0x7fff {
-		v.fatal("land: division fault (0xf2ac)")
+	if bx == 0 || ax == -0x8000 && bx == -1 {
+		// cwd; idiv bx faults only for a sky width of 0xffff (a division
+		// by zero, which hangs the original) or 0xfffe with ax -32768, whose
+		// retries shift in the upper halves of the caller's eax and edx
+		v.fatal("land: the sky's division at 0xf2ac faults (width 0xfffe or 0xffff)")
 		return
 	}
 	dx := -int16(int32(ax) % int32(bx))
@@ -470,7 +473,7 @@ eb0a:
 		r.colEdge()
 		setw(&r.ebx, r.g16(0x922)+r.g16(0x858))
 		r.eax = r.g32(0x928)
-		q := v.idiv32by16(int32(r.eax), ws(r.ebx))
+		q := v.idivRol(int32(r.eax), ws(r.ebx))
 		r.eax = uint32(uint16(q) + r.g16(0x992))
 		v.setGs32(0x98c, r.eax)
 	}
@@ -480,8 +483,10 @@ eb0a:
 	}
 	v.setGs32(0x9a8, r.g32(0x9a4))
 	{
-		e := int32(r.g32(0x920)-r.g32(0x938)) >> 8
-		q := v.idiv32by16(e, int16(r.g16(0x99a)))
+		e := uint32(int32(r.g32(0x920)-r.g32(0x938)) >> 8)
+		var q int16
+		eax, edx := v.xdiv(DivSigned|DivWord, rol16(e), e, uint32(r.g16(0x99a)))
+		q, r.edx = int16(eax), edx // edx goes on to 0xee9c
 		r.eax = uint32(uint16(q))
 		if int16(r.g16(0x9b6)) == 1 {
 			r.eax = 0xb3
@@ -502,13 +507,13 @@ eb0a:
 		v.setGsu16(0x99e, y)
 		r.ecx = r.g32(0x978)
 		r.ecx = r.ecx<<8 | r.ecx>>24
-		d := uint32(w(r.ecx))
-		if d == 0 || 0x200000/d > 0xffff {
-			v.fatal("land: division fault (0xee9c)")
+		// 0x200000 in dx:ax; eax's upper half is 0 (at most 0xb3 << 8)
+		eax, edx := v.xdiv(DivWord, r.edx&^0xffff|0x20, 0, uint32(w(r.ecx)))
+		if v.err != nil {
 			return
 		}
-		q := 0x200000 / d
-		if 0x200000%d != 0 {
+		q := eax
+		if w(edx) != 0 {
 			q++
 		}
 		r.eax = uint32(uint16(q))
@@ -740,11 +745,11 @@ func (r *lregs) colEdge() {
 	bx := int16(w(r.edi)<<cl) - int16(r.g16(0x89c))
 	cx := ax + int16(r.g16(0x888)) - int16(r.g16(0x882))
 	dx := bx + int16(r.g16(0x88a)) - int16(r.g16(0x884))
-	q1, q2 := v.landPersp2(ax, bx, cx, dx, int16(r.g16(0x922)))
+	q1, q2 := v.landPersp2(r.eax, ax, bx, cx, dx, int16(r.g16(0x922)))
 	bx = q2 - q1
 	r.eax = uint32(uint16(q1+int16(r.g16(0x990)))) << 16
 	v.setGs32(0x97c, r.eax)
-	q := v.idiv32by16(int32(bx)<<8, int16(r.g16(0x85c)))
+	q := v.idivMem(int32(bx)<<8, int16(r.g16(0x85c)))
 	r.eax = uint32(int32(q) << 8)
 	v.setGs32(0x980, r.eax)
 }
@@ -1402,12 +1407,9 @@ func (v *VM) landSprite(esi uint32) {
 	v.wu32(0x1ab5a, r.edx)
 	r.edx = (uint32(r.m16(r.ebx+4)) + 1) << 8
 	{
-		d := uint32(v.ru16(0x1ab44))
-		if d == 0 || r.edx/d > 0xffff {
-			v.fatal("land: division fault (0xfcc8)")
-			return
-		}
-		r.eax = uint32(int32(int16(r.edx/d)) << 8)
+		var eax uint32
+		eax, r.edx = v.xdiv(DivWord|DivRM4, rol16(r.edx), r.edx, uint32(v.ru16(0x1ab44)))
+		r.eax = uint32(int32(int16(eax)) << 8)
 	}
 	v.wu32(0x1ab4e, r.eax)
 	v.wu32(0x1ab52, r.eax)
@@ -1654,7 +1656,7 @@ func (r *lregs) landDA41() {
 			return
 		}
 	} else {
-		col, scale := v.landPersp(ax, bx, cx)
+		col, scale := v.landPersp(r.eax, ax, bx, cx)
 		v.w16(esi+0xc, col+int16(r.g16(0x990)))
 		e := uint32(v.ru16(0x1aa84)) + r.g32(0x9a8)
 		v.wu16(esi+0xe, r.f16(e*2)+r.g16(0x984))

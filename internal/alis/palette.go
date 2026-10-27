@@ -120,24 +120,33 @@ func dpalDark(c8 uint8, dk uint16) uint8 {
 
 // dpalLoadDark applies RRQ's dark palette while loading 8-bit colours.
 func (v *VM) dpalLoadDark(rgb8 []uint8, first, n int) {
-	d := &v.img.dpal
+	v.dpalDarkInto(v.img.dpal.tpal[:], rgb8, first, n)
+}
+
+// dpalDarkInto is 0x8adf: n 8-bit colours from first through the dark
+// table 0x1716f into the 6-bit palette dst; black becomes 2,2,2 where an
+// entry brightens (signed compares).
+func (v *VM) dpalDarkInto(dst, rgb8 []uint8, first, n int) {
 	dk := &v.img.dkpalet
 	for i := range n {
 		e := first + i
 		r, g, b := rgb8[i*3], rgb8[i*3+1], rgb8[i*3+2]
-		if r == 0 && g == 0 && b == 0 && (uint16(dk[e*3]) > 0x100 || uint16(dk[e*3+1]) > 0x100 || uint16(dk[e*3+2]) > 0x100) {
+		if r == 0 && g == 0 && b == 0 && (dk[e*3] > 0x100 || dk[e*3+1] > 0x100 || dk[e*3+2] > 0x100) {
 			r, g, b = 2, 2, 2
 		}
-		d.tpal[e*3] = dpalDark(r, uint16(dk[e*3]))
-		d.tpal[e*3+1] = dpalDark(g, uint16(dk[e*3+1]))
-		d.tpal[e*3+2] = dpalDark(b, uint16(dk[e*3+2]))
+		dst[e*3] = dpalDark(r, uint16(dk[e*3]))
+		dst[e*3+1] = dpalDark(g, uint16(dk[e*3+1]))
+		dst[e*3+2] = dpalDark(b, uint16(dk[e*3+2]))
 	}
 }
 
-// dpalTopalette loads a 0xFE resource at res (0: keep the target).
-func (v *VM) dpalTopalette(res uint32, dur int16) {
+// dpalTopalette is 0x8988: it loads a 0xFE resource at res (0: keep the
+// target) and fades to the target when dx (the duration, or the saved
+// palette's index) is set and the speed count 0x16064 is above 200.
+func (v *VM) dpalTopalette(res uint32, dur, dx int16) {
 	d := &v.img.dpal
-	fade := v.dpalSteps(dur, 1)
+	v.dpalSteps(dur, 1)
+	fade := dx != 0 && v.ru16(dsMip) > 200
 	if res != 0 {
 		n, first := int(v.mem[res+1])+1, int(v.mem[res+2])
 		if n == 1 {
@@ -166,15 +175,22 @@ func (v *VM) dpalCtopalsav(idx, dur int16) {
 		src = &d.sav1
 	}
 	if v.img.fdarkpal != 0 {
-		var rgb8 [768]uint8
-		for k := range rgb8 {
-			rgb8[k] = src[k] << 2
+		// 0x8c8b: black is tested before the shift to 8 bits
+		dk := &v.img.dkpalet
+		for e := range 256 {
+			c := src[e*3 : e*3+3]
+			rgb := [3]uint8{c[0], c[1], c[2]}
+			if rgb == [3]uint8{} && (dk[e*3] > 0x100 || dk[e*3+1] > 0x100 || dk[e*3+2] > 0x100) {
+				rgb = [3]uint8{2, 2, 2}
+			}
+			for k := range 3 {
+				d.tpal[e*3+k] = dpalDark(rgb[k]<<2, uint16(dk[e*3+k]))
+			}
 		}
-		v.dpalLoadDark(rgb8[:], 0, 256)
 	} else {
 		d.tpal = *src
 	}
-	v.dpalTopalette(0, dur)
+	v.dpalTopalette(0, dur, idx)
 }
 
 func (v *VM) dosPalReset() { v.img.dpal = dosPal{} }
@@ -188,7 +204,7 @@ func (v *VM) dosCpalette(idx int16, res uint32) {
 		}
 	} else if d.skip == 0 && v.mem[res] == 0xfe {
 		d.counter, d.reload = 0, 0
-		v.dpalTopalette(res, 0)
+		v.dpalTopalette(res, 0, 0)
 	}
 	d.skip = 0
 }
@@ -201,7 +217,7 @@ func (v *VM) dosCtopalet(idx, dur int16, res uint32) {
 				v.dpalCtopalsav(idx, dur)
 			}
 		} else if v.mem[res] == 0xfe {
-			v.dpalTopalette(res, dur)
+			v.dpalTopalette(res, dur, dur)
 		}
 	}
 	d.skip = 0
@@ -241,7 +257,7 @@ func (v *VM) dosCsavepal(idx int16) {
 func (v *VM) dosPutinPalette(res uint32) {
 	d := &v.img.dpal
 	d.counter, d.reload = 0, 0
-	v.dpalTopalette(res, 0)
+	v.dpalTopalette(res, 0, 0)
 }
 
 // dosFilmPalette writes a film colour chunk straight into the live palette.

@@ -11,7 +11,8 @@ import (
 
 // The sessions in testdata must reproduce, draw for draw, the screen and
 // palette CRCs that the original START.EXE produced under cmd/origrun
-// (-frames) with the same input.
+// (-frames) with the same input. The 21 minute play sessions take about
+// 100 s each and only run with RRQH_LONG=1.
 
 func TestMain(m *testing.M) {
 	if os.Getenv("RRQH_RUN_MAIN") != "" {
@@ -30,8 +31,19 @@ func TestFramesMatchOriginal(t *testing.T) {
 		name  string
 		input string
 		maxMs int
-	}{{"intro90", "", 90000}, {"start60", "start.txt", 60000}, {"walk118", "walk.txt", 118000}} {
+		long  bool
+	}{
+		{"intro90", "", 90000, false},
+		{"start60", "start.txt", 60000, false},
+		{"walk118", "walk.txt", 118000, false},
+		{"play2", "play2.txt", 1260000, true},
+		{"play6", "play6.txt", 1260000, true},
+		{"intro", "intro.txt", 600000, true},
+	} {
 		t.Run(tc.name, func(t *testing.T) {
+			if tc.long && os.Getenv("RRQH_LONG") == "" {
+				t.Skip("long session; set RRQH_LONG=1")
+			}
 			td, _ := filepath.Abs(filepath.Join("..", "..", "testdata"))
 			tmp := t.TempDir()
 			frames := filepath.Join(tmp, "frames")

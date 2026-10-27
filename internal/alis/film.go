@@ -2,112 +2,209 @@ package alis
 
 import (
 	"fmt"
+	"io"
 	"os"
-	"strings"
 )
 
 var fliDebug = os.Getenv("FLIDBG") != ""
 
-// FLI/FLC films on the PC (alis video.c, video/fli.c, escnames.c
-// copenfilm/cdelfilm). A film plays from buf: the whole film file, or VM
-// memory for films stored in a resource.
+// FLI films (START.EXE 0x13c2f..0x144a0, opcodes 0x8e5b copenfilm, 0x8ed0
+// crunfilm, 0x8ef9 cdelfilm; the state is the struct 0x17944). A film plays
+// from buf: the whole film file (START.EXE streams it through a buffer), or
+// VM memory for cfilm. Frames are decoded straight into the 320x200 screen
+// 0x178cb, at its origin.
 
-const vgaLogicSize = 128400 - 0x40
+// Film flags (the struct's first word).
+const (
+	filmOverlay = 1 << 0 // brun skips colour 0, no black chunk, palette through the dark table
+	filmPal160  = 1 << 1 // a 256-colour palette packet sets 160 colours
+	filmLogic   = 1 << 2 // decode into the logic screen and copy it to physic per frame
+	filmClear   = 1 << 3 // the header clears the palette and the screen
+)
 
 type film struct {
-	id                 int16
-	playing            bool
-	buf                []byte
-	addr1, addr2, endp int
-	frame, frames      int16
-	width, height      uint16
-	result             int16
-	batchframes        int16
-	waitclock          int16
-	basemain           uint32
-	active             bool // eAlisVideoFLIC
-	endframe           int
-
-	vga      []byte
-	deadline uint32 // timeclock of the next frame
+	id          int16 // flags; bits 8..15 enable the audio chunks 0x1000+n
+	playing     bool
+	fh          File   // the streamed file (+0x4e)
+	addr1       uint32 // the next chunk (+0x1c)
+	addr2       uint32 // cfilm: the film's first chunk (+0x18)
+	end         uint32 // the end of the last chunk (+0x20)
+	size        uint32 // the buffer's size (+0x24)
+	base        uint32 // the buffer (+0x28)
+	bend        uint32 // the buffer's end (+0x2c)
+	wpos        uint32 // where the next read goes (+0x30)
+	state       uint32 // the refill state (+0x34)
+	budget      uint32 // bytes read per frame (+0x38)
+	first       uint32 // bytes read at the start (+0x3c)
+	cross       uint32 // the chunk across the buffer's end (+0x40)
+	bufh        int32  // the buffer's memory handle (+0x50)
+	frame       int16
+	frames      int16
+	result      int16
+	batchframes int16
+	waitclock   int16
+	basemain    uint32
+	palPending  bool   // 0x1c2de
+	deadline    uint32 // timeclock of the next frame
+	ch          uint32 // the speech's mixer channel (+0x58)
+	speech      int    // the buffer of the last speech chunk (+0x5c)
 }
 
 func le16b(b []byte) uint16 { return uint16(b[0]) | uint16(b[1])<<8 }
-func le32b(b []byte) uint32 { return uint32(le16b(b)) | uint32(le16b(b[2:]))<<16 }
 
-func cdelfilm(v *VM) {
-	v.endfilm()
-	v.film = film{vga: v.film.vga}
+// dsCDSpeed (0x18abc) is the CD's speed in bytes per second.
+const dsCDSpeed = 0x18abc
+
+func cdelfilm(v *VM) { v.delfilm() }
+
+// delfilm is 0x13d53.
+func (v *VM) delfilm() {
+	f := &v.film
+	f.addr1 = 0 // 0x13f08 with -1
+	v.filmPalFlush()
+	if f.bufh != 0 {
+		v.ioMfree(f.bufh)
+		f.bufh, f.base = 0, 0
+	}
+	if f.fh != nil {
+		f.fh.Close()
+		f.fh = nil
+	}
 }
 
+// copenfilm is 0x8e5b: flags, file name, buffer size in thousands of
+// bytes, frame time in ticks.
 func copenfilm(v *VM) {
-	v.film = film{vga: v.film.vga}
+	if v.film.fh != nil {
+		v.delfilm()
+	}
+	f := &v.film
 	v.readexecOpername()
-	v.film.id = int16(v.varD7)
+	f.id = int16(v.varD7)
 	v.readexecOpernameSwap()
-	v.fp = nil
-	name := v.cstr(v.sd7)
-	// the CD carries "150." (Falcon) and "300." (fullscreen) variants
-	if i := strings.Index(name, "150."); i >= 0 {
-		name = name[:i] + "300." + name[i+4:]
-		copy(v.mem[v.sd7+uint32(i):], "300.")
+	fh, err := v.fs.Open(v.cstr(v.sd7), 0)
+	if err != nil {
+		v.fatal("film: can't open " + v.cstr(v.sd7))
+		return
 	}
-	if data, err := v.fs.ReadFile(name); err == nil {
-		v.film.buf = data
-	}
+	f.fh = fh
 	v.readexecOpername()
+	f.size = 1000 * uint32(uint16(v.varD7))
 	v.readexecOpername()
-	v.film.waitclock = int16(v.varD7)
-	v.film.basemain = v.basemain
+	f.waitclock = int16(v.varD7)
+	f.basemain = v.basemain
 	v.inifilm()
-	v.varD7 = int32(v.film.frames)
+	v.varD7 = int32(f.frames)
 	v.cstoreContinue()
 }
 
-func (v *VM) filmStreamClose() {}
+// filmRead is the DOS read 0x30ca into VM memory.
+func (v *VM) filmRead(dst, n uint32) int {
+	if int32(n) <= 0 {
+		return 0
+	}
+	r, _ := io.ReadFull(v.film.fh, v.mem[dst:dst+n])
+	return r
+}
 
-func (v *VM) endfilm() { v.film.active = false }
+// filmTarget points 0x178cb at the screen the film draws into.
+func (v *VM) filmTarget() {
+	scr := uint32(dsPhysic)
+	if v.film.id&filmLogic != 0 {
+		scr = dsLogic
+	}
+	v.w32(dsWlogic, int32(v.ru32(scr)))
+	v.w16(dsWloglarg, v.r16(dsLoglarg))
+	v.w16(dsWlogx1, 0)
+	v.w16(dsWlogy1, 0)
+}
 
+// inifilm is 0x13c2f.
 func (v *VM) inifilm() {
 	f := &v.film
 	f.playing = false
-	if f.vga == nil {
-		f.vga = make([]byte, vgaLogicSize)
+	f.bufh, f.base = 0, 0
+	if f.fh != nil {
+		f.size = max(f.size, 0x23a50)
+		f.budget = uint32(uint64(v.ru32(dsCDSpeed)) * uint64(uint16(f.waitclock)) / tickClocks)
+		f.budget -= f.budget >> 3
+		f.first = max(f.size>>2, 0x11d28)
+		n := f.size
+		if uint16(f.id)&0xff00 != 0 {
+			n += 0x3e80
+		}
+		f.bufh = v.ioMalloc(int32(n))
+		if f.bufh == 0 {
+			v.fatal("film: no memory for the buffer")
+			return
+		}
+		f.base = v.ru32(uint32(f.bufh))
+		f.addr1 = f.base
+		if uint16(f.id)&0xff00 != 0 { // 0x13cd9
+			f.ch = v.sbFilmChan()
+		}
 	}
-	v.fliReset()
-	f.active = true
-	v.flitofen()
+	v.filmTarget()
+	f.palPending = false
+	if f.fh != nil {
+		v.filmOpen()
+	}
+	v.filmStep()
 	f.deadline = v.timeclock
 }
 
+// filmOpen is 0x13f08 with the file's handle: the first read fills the
+// start of the buffer.
+func (v *VM) filmOpen() {
+	f := &v.film
+	n := v.filmRead(f.addr1, f.first)
+	f.base = f.addr1
+	f.wpos = f.base + uint32(n)
+	f.bend = f.base + f.size
+	f.state = 0
+}
+
+// runfilm is 0x13da8.
 func (v *VM) runfilm() {
 	f := &v.film
 	img := &v.img
 	bm := f.basemain
-	img.fenx1 = v.r16(bm + 0xe)
-	img.fenx2 = v.r16(bm+0x12) + img.fenx1
-	img.clipl = v.r16(bm+0x12) + 1
-	img.feny1 = v.r16(bm + 0x10)
-	img.feny2 = v.r16(bm+0x14) + img.feny1
-	img.cliph = v.r16(bm+0x14) + 1
+	x, w := v.r16(bm+0xe), v.r16(bm+0x12)
+	y, h := v.r16(bm+0x10), v.r16(bm+0x14)
+	v.w16(dsBlocx1, x)
+	v.w16(dsFenx1, x)
+	v.w16(dsFenl, w+1)
+	v.w16(dsBlocx2, x+w)
+	v.w16(dsFenx2, x+w)
+	v.w16(dsBlocy1, y)
+	v.w16(dsFeny1, y)
+	v.w16(dsFenh, h+1)
+	v.w16(dsBlocy2, y+h)
+	v.w16(dsFeny2, y+h)
+	img.fenx1, img.fenx2, img.clipl = x, x+w, w+1
+	img.feny1, img.feny2, img.cliph = y, y+h, h+1
 	img.wloglarg = img.loglarg
 	img.wlogx1, img.wlogy1 = 0, 0
 	img.clipx1, img.clipy1 = img.fenx1, img.feny1
 	img.clipx2, img.clipy2 = img.fenx2, img.feny2
+	v.filmTarget()
 	f.playing = true
 	for {
-		// wait for the frame's tick (START.EXE 0x13e4b)
+		// wait for the frame's tick (0x13e4b)
 		if f.waitclock > 0 {
 			for f.deadline > v.timeclock && v.state != stateStopped {
 				v.waitTick()
 			}
 		}
 		f.deadline = v.timeclock + uint32(uint16(f.waitclock))
-		result := v.flitofen()
+		ok := v.filmStep()
+		if f.id&filmLogic != 0 {
+			copy(v.mem[v.ru32(dsPhysic):][:gameWidth*gameHeight], v.mem[v.ru32(dsLogic):])
+		}
 		if fliDebug {
 			fmt.Fprintf(os.Stderr, "F %d %d tc=%d\n", v.Now()/1000, f.frame, v.timeclock)
 		}
-		if !result {
+		if !ok {
 			break
 		}
 		f.batchframes--
@@ -119,254 +216,309 @@ func (v *VM) runfilm() {
 			f.batchframes++
 		}
 	}
-	f.addr1 = f.addr2
+	if f.fh != nil {
+		f.fh.Seek(0, io.SeekStart) // 0x3095; the buffer stays as it is
+	} else {
+		f.addr1 = f.addr2
+	}
 	f.result = -0x7ffc
 }
 
-func (v *VM) flitofen() bool {
+// filmStep is 0x13f08 (eax 0): the header or the next frame; false at the
+// end of the film.
+func (v *VM) filmStep() bool {
 	f := &v.film
-	for f.buf != nil && f.addr1+6 <= len(f.buf) {
-		b := f.buf[f.addr1:]
-		switch typ := le16b(b[4:]); {
-		case typ == 0xaf11 || typ == 0xaf12:
-			f.endp = f.addr1 + int(le32b(b))
-			f.frames = int16(le16b(b[6:]))
-			f.width = le16b(b[8:])
-			f.height = le16b(b[10:])
-			f.addr1 += 0x80
+	ok := false
+	if p := f.addr1; p != 0 {
+		switch v.ru16(p + 4) {
+		case 0xaf11: // 0x1412c
+			if f.id&filmClear != 0 {
+				clear(v.img.dpal.mpal[:])
+				v.dpalUpload()
+				clear(v.filmScreen())
+			}
+			f.end = p + v.ru32(p)
+			f.addr1 = p + 0x80
+			f.frames = int16(v.ru16(p + 6))
 			f.frame = 0
-			if need := int(f.width) * int(f.height); need > len(f.vga) {
-				nv := make([]byte, need)
-				copy(nv, f.vga)
-				f.vga = nv
-			}
-			return true
-		case typ == 0xf100 && f.endp > f.addr1:
-			n := int(le32b(b))
-			if n == 0 {
-				n = 16
-			}
-			f.addr1 += n
-			f.frame++
-		case typ == 0xf1fa && f.endp > f.addr1:
-			v.flinext(f.addr1)
-			return true
-		default:
-			return false
+			v.filmRefill()
+			ok = true
+		case 0xf1fa:
+			v.filmFrame()
+			v.filmRefill()
+			ok = true
 		}
 	}
-	return false
+	v.filmPalFlush()
+	return ok
 }
 
-func (v *VM) flinext(addr int) {
+// filmRefill is 0x13fd0: reads at most budget bytes into the buffer. When
+// the file reaches the buffer's end, the chunk across it moves to the
+// start, the reads fill up to the next chunk, and the next chunk goes to
+// the start once played up to there.
+func (v *VM) filmRefill() {
 	f := &v.film
-	f.endframe = addr + int(le32b(f.buf[addr:]))
-	v.fliElements(addr + 16)
-	dx, dy := int(v.img.fenx1), int(v.img.feny1)
-	fw := int(f.width)
-	physic := v.mem[v.ru32(dsPhysic):][:gameWidth*gameHeight]
-	for y := range int(f.height) {
-		row := dy + y
-		if row < 0 || row >= gameHeight || dx < 0 || dx+fw > gameWidth {
+	if f.fh == nil || int32(f.end) <= int32(f.base) {
+		return
+	}
+	switch f.state {
+	case 0:
+		n := min(int32(f.bend-f.wpos), int32(f.budget))
+		if n != 0 {
+			r := v.filmRead(f.wpos, uint32(n))
+			if r <= 0 {
+				return
+			}
+			f.wpos += uint32(r)
+			if int32(f.wpos) < int32(f.bend) {
+				break
+			}
+		}
+		p := f.addr1 // 0x1402d
+		var q uint32
+		for {
+			q = p
+			p += v.ru32(p)
+			if int32(p) >= int32(f.bend) {
+				break
+			}
+		}
+		if p == f.bend {
+			break
+		}
+		f.state, f.cross = 1, q
+		fallthrough
+	case 1:
+		n := f.bend - f.cross
+		if int32(n) > int32(f.addr1-f.base) {
+			break
+		}
+		copy(v.mem[f.base:f.base+n], v.mem[f.cross:])
+		f.wpos = f.base + n
+		f.state = 2
+	case 2:
+		n := min(int32(f.addr1-f.wpos), int32(f.budget))
+		r := v.filmRead(f.wpos, uint32(n))
+		if r <= 0 {
+			return
+		}
+		f.wpos += uint32(r)
+	default:
+		return
+	}
+	// 0x140ae
+	if !(int32(f.addr1) < int32(f.bend) && int32(f.addr1+v.ru32(f.addr1)) <= int32(f.bend)) {
+		d := f.addr1 - f.base
+		f.addr1 = f.base
+		f.end -= d
+		f.state = 0
+	}
+	if int32(f.addr1) >= int32(f.wpos) {
+		return
+	}
+	e := f.addr1 + v.ru32(f.addr1)
+	if int32(e) <= int32(f.wpos) {
+		return
+	}
+	if int32(e) < int32(f.bend) {
+		n := f.wpos - f.addr1
+		for i := range n { // rep movsb
+			v.mem[f.base+i] = v.mem[f.addr1+i]
+		}
+		f.wpos = f.base + n
+		f.addr1 = f.base
+		e = f.base + v.ru32(f.base)
+	}
+	if r := v.filmRead(f.wpos, e-f.wpos); r > 0 {
+		f.wpos += uint32(r)
+	}
+}
+
+// filmPalFlush is 0x1433b: the palette goes out at the next retrace.
+func (v *VM) filmPalFlush() {
+	if v.film.palPending {
+		v.waitRetrace()
+		v.dpalUpload()
+		v.film.palPending = false
+	}
+}
+
+func (v *VM) filmScreen() []byte {
+	return v.mem[v.ru32(dsWlogic):][:gameWidth*gameHeight]
+}
+
+// filmFrame is 0x14164 (it clears 0x64, see filmAudio). A chunk at or
+// past the frame's end ends the loop without advancing, as in the original.
+func (v *VM) filmFrame() {
+	f := &v.film
+	end := f.addr1 + v.ru32(f.addr1)
+	n := int(v.ru16(f.addr1 + 6))
+	p := f.addr1 + 16
+	for range n {
+		if p >= end {
 			continue
 		}
-		copy(physic[row*gameWidth+dx:row*gameWidth+dx+fw], f.vga[y*fw:])
+		typ := v.ru16(p + 4)
+		next := p + v.ru32(p)
+		b := v.mem[p+6 : max(next, p+6)]
+		switch {
+		case typ == 0xb:
+			v.filmPalette(b)
+		case typ == 0xc:
+			v.filmDelta(b)
+		case typ == 0xd:
+			if f.id&filmOverlay == 0 {
+				clear(v.filmScreen())
+			}
+		case typ == 0xf:
+			v.filmBrun(b)
+		case typ == 0x10: // 0x14490 copies 64000 bytes whatever the chunk's size
+			copy(v.filmScreen(), v.mem[p+6:])
+		case typ >= 0x1000 && typ < 0x1008:
+			v.filmAudio(b, typ)
+		}
+		p = next
 	}
-	copy(v.mem[v.ru32(dsLogic):], physic)
-	f.addr1 = f.endframe
+	f.addr1 = end
 	f.frame++
 }
 
-func (v *VM) fliElements(addr int) {
+// filmPalette is 0x14270: packets of (first colour, count) with 6-bit
+// colours. With filmOverlay and the dark table on (0x178fb), the colours
+// go through the table (0x8adf) after a shift to 8 bits done in the film
+// data, and every packet reads the same bytes (the original restores esi).
+func (v *VM) filmPalette(b []byte) {
 	f := &v.film
-	for addr < f.endframe {
-		off := int(le32b(f.buf[addr:]))
-		typ := le16b(f.buf[addr+4:])
-		addr += 6
-		next := addr + off - 6
-		b := f.buf[addr:]
-		switch typ {
-		case 0x4:
-			v.fliPalette256(b)
-		case 0x7:
-			v.fliSS2(b)
-		case 0xb:
-			v.dosFilmPalette(b)
-		case 0xc:
-			v.fliDecomp(b, true)
-		case 0xd:
-			clear(f.vga[:int(f.width)*int(f.height)])
-		case 0xf:
-			v.fliDecomp(b, false)
-		case 0x10:
-			w := int(f.width)
-			for y := range int(f.height) {
-				copy(f.vga[y*w:y*w+w], b[y*w:])
-			}
-		default:
-			if typ >= 0x1000 && typ <= 0x1007 || typ == 0x1300 {
-				v.fliAudio(f.buf[addr:next], typ)
-			}
-		}
-		addr = next
-	}
-}
-
-func (v *VM) fliPalette256(b []byte) {
+	d := &v.img.dpal
 	packets := le16b(b)
-	p, index := 2, 0
-	for {
-		index += int(b[p])
-		n := int(b[p+1])
-		p += 2
-		if n == 0 {
-			n = 256
-		}
-		if index+n > 256 {
-			n = 256 - index
-			packets = 1
-		}
-		for i := range n {
-			c := b[p+i*3:]
-			v.img.mpalet[index+i] = 0xff000000 | uint32(c[0])<<16 | uint32(c[1])<<8 | uint32(c[2])
-		}
-		p += n * 3
-		index += n
-		packets--
-		if packets == 0 {
-			break
-		}
-	}
-}
-
-func (v *VM) fliDecomp(b []byte, partial bool) {
-	f := &v.film
-	w := int(f.width)
-	index, n := 0, int(f.height)
-	p := 0
-	if partial {
-		index = int(le16b(b)) * w
-		n = int(le16b(b[2:]))
-		p = 4
-	}
-	vga := f.vga
-	for ; n > 0; n-- {
-		if index+w > len(vga) {
-			break
-		}
-		packets := int(b[p])
-		p++
-		col := 0
-		for ; packets > 0; packets-- {
-			if partial {
-				col += int(b[p])
-				p++
-			}
-			count := int(int8(b[p]))
-			p++
-			if partial {
-				count = -count
-			}
-			if count >= 0 {
-				if count == 0 {
-					count = 256
-				}
-				if col+count > w {
-					count = w - col
-					n, packets = 1, 1
-				}
-				c := b[p]
-				p++
-				for i := range count {
-					vga[index+col+i] = c
-				}
-			} else {
-				count = -count
-				if col+count > w {
-					count = w - col
-					n, packets = 1, 1
-				}
-				copy(vga[index+col:index+col+count], b[p:])
-				p += count
-			}
-			col += count
-		}
-		index += w
-	}
-}
-
-func (v *VM) fliSS2(b []byte) {
-	f := &v.film
-	w := int(f.width)
-	vga := f.vga
-	lines := le16b(b)
-	p, y := 2, 0
-	for lines > 0 {
-		op := le16b(b[p:])
-		p += 2
-		switch op & 0xc000 {
-		case 0xc000:
-			y += int(uint16(-int16(op)))
-			continue
-		case 0x8000:
-			if i := y*w + w - 1; i < len(vga) {
-				vga[i] = uint8(op)
-			}
-			continue
-		}
-		x := 0
-		line := y * w
-		for packets := op; packets > 0; packets-- {
-			x += int(b[p])
-			count := int8(b[p+1])
-			p += 2
-			if count >= 0 {
-				n := int(count) * 2
-				if x+n > w {
-					n = max(w-x, 0)
-				}
-				if line+x+n <= len(vga) {
-					copy(vga[line+x:line+x+n], b[p:])
-				}
-				p += int(count) * 2
-				x += n
-			} else {
-				b0, b1 := b[p], b[p+1]
-				p += 2
-				for k := 0; k < int(-count) && x+2 <= w; k++ {
-					if line+x+1 < len(vga) {
-						vga[line+x], vga[line+x+1] = b0, b1
-					}
-					x += 2
+	p := 2
+	if f.id&filmOverlay != 0 && v.img.fdarkpal != 0 {
+		for ; packets != 0; packets-- {
+			first, n := int(b[p]), int(b[p+1])
+			if n == 0 {
+				n = 256
+				if f.id&filmPal160 != 0 {
+					n = 160
 				}
 			}
-		}
-		y++
-		lines--
-	}
-}
-
-func (v *VM) fliAudio(b []byte, typ uint16) {
-	n := len(b) &^ 1
-	if n == 0 {
-		return
-	}
-	var smp []byte
-	if typ == 0x1300 {
-		n /= 2
-		smp = make([]byte, n)
-		for i := range n {
-			smp[i] = b[i*2+1]
+			n = min(n, 256-first)
+			rgb := b[p+2 : p+2+n*3]
+			for i := range rgb {
+				rgb[i] <<= 2
+			}
+			v.dpalDarkInto(d.mpal[:], rgb, first, n)
 		}
 	} else {
-		if uint16(1<<(typ-0x1000))<<8&uint16(v.film.id) == 0 {
+		for ; packets != 0; packets-- {
+			first, n := int(b[p]), int(b[p+1])
+			p += 2
+			if n == 0 {
+				n = 256
+				if f.id&filmPal160 != 0 {
+					n = 160
+				}
+			}
+			copy(d.mpal[first*3:], b[p:p+n*3])
+			p += n * 3
+		}
+	}
+	d.mpal[0], d.mpal[1], d.mpal[2] = 0, 0, 0
+	f.palPending = true
+	if f.id&filmOverlay == 0 {
+		v.filmPalFlush()
+	}
+}
+
+// filmDelta is 0x14358: from line (word), a byte count of lines (0: 256)
+// of packets (skip, signed count: > 0 copies, else fills -count).
+func (v *VM) filmDelta(b []byte) {
+	scr := v.mem[v.ru32(dsWlogic):]
+	line := int(le16b(b)) * gameWidth
+	lines := b[2]
+	p := 4
+	for {
+		di := line
+		packets := b[p]
+		p++
+		for ; packets != 0; packets-- {
+			di += int(b[p])
+			c := int(int8(b[p+1]))
+			p += 2
+			if c > 0 {
+				copy(scr[di:di+c], b[p:p+c])
+				p += c
+				di += c
+			} else {
+				col := b[p]
+				p++
+				for range -c {
+					scr[di] = col
+					di++
+				}
+			}
+		}
+		line += gameWidth
+		if lines--; lines == 0 {
 			return
 		}
-		smp = b[:n]
 	}
-	f := uint32(22050)
-	if v.film.waitclock > 0 {
-		f = 60 * uint32(n) / uint32(v.film.waitclock)
+}
+
+// filmBrun is 0x14418: 200 rows of packets (signed count: >= 0 fills,
+// < 0 copies -count), written on without realigning to the rows; with
+// filmOverlay colour 0 is transparent.
+func (v *VM) filmBrun(b []byte) {
+	scr := v.mem[v.ru32(dsWlogic):]
+	transp := v.film.id&filmOverlay != 0
+	di, p := 0, 0
+	for range 200 {
+		packets := b[p]
+		p++
+		for ; packets != 0; packets-- {
+			c := int(int8(b[p]))
+			p++
+			if c >= 0 {
+				col := b[p]
+				p++
+				if !transp || col != 0 {
+					for i := range c {
+						scr[di+i] = col
+					}
+				}
+				di += c
+			} else {
+				for range -c {
+					if col := b[p]; !transp || col != 0 {
+						scr[di] = col
+					}
+					p++
+					di++
+				}
+			}
+		}
 	}
-	v.fliAudioPush(smp, int16(min(f, 32767)))
+}
+
+// filmAudio is 0x14211: the chunks of the channels enabled in the flags'
+// high byte, copied into one of two speech buffers and queued on the
+// film's mixer channel at 0x1bfca*n/waitclock Hz.
+func (v *VM) filmAudio(b []byte, typ uint16) {
+	f := &v.film
+	if uint16(1<<(typ-0x1000))<<8&uint16(f.id) == 0 {
+		return
+	}
+	f.speech ^= 1
+	copy(v.sb.film[f.speech][:], b)
+	n := uint32(len(b))
+	if f.waitclock == 0 {
+		v.fatal("film: speech with a zero frame time divides by zero (START.EXE 0x14254)")
+		return
+	}
+	freq := uint16(60 * uint32(uint16(n)) / uint32(uint16(f.waitclock)))
+	if v.sbFilmPush(f.ch, sbFilmBase+uint32(f.speech)*0x10000, n, freq) {
+		// meant to set the film's 0x64 (skip the frame wait), but edi
+		// points at the mixer channel by then
+		v.mem[f.ch+0x64] = 1
+	}
 }

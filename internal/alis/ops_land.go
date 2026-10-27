@@ -46,16 +46,17 @@ func camov(v *VM) {
 }
 
 func cfilm(v *VM) {
-	v.filmStreamClose()
+	if v.film.fh != nil { // 0x8e2f drops the handle and leaks the buffer
+		v.film.fh.Close()
+	}
 	v.film = film{}
 	v.filmnode = 0
 	v.readexecOpername()
 	v.film.id = int16(v.varD7)
 	v.readexecOpername()
 	addr := uint32(v.adresdes(v.varD7)) + 0x20 + 4
-	v.film.buf = v.mem
-	v.film.addr1 = int(addr)
-	v.film.addr2 = int(addr)
+	v.film.addr1 = addr
+	v.film.addr2 = addr
 	v.readexecOpername()
 	v.film.waitclock = int16(v.varD7)
 	v.film.basemain = v.basemain
@@ -127,7 +128,7 @@ func (v *VM) landAtan(ax, bx int16) (int16, int16) {
 		if cx < 0 {
 			bp = -bp
 		}
-		bx = v.idiv32by16(int32(bx)<<9, v.tsin(int32(bp)*2))
+		bx = v.idivMem(int32(bx)<<9, v.tsin(int32(bp)*2))
 	} else {
 		edx := uint32(int32(si) << 5)
 		bp = 0x5a
@@ -152,7 +153,7 @@ func (v *VM) landAtan(ax, bx int16) (int16, int16) {
 		if cx >= 0 {
 			bp = -bp
 		}
-		bx = v.idiv32by16(int32(cx)<<9, v.tcos(int32(bp)*2))
+		bx = v.idivMem(int32(cx)<<9, v.tcos(int32(bp)*2))
 	}
 	goto done
 vertical:
@@ -297,7 +298,11 @@ func (v *VM) landWalk(ebp uint32) int16 {
 			}
 			// the slope's sign is lost: ax stays |si| (0x3c0 only clears si)
 			p := mul16(int16(ax), int16(int8(v.mem[tete+1])))
-			q := v.idiv32by16(p>>2, 0xc)
+			// edx holds p>>2 word-swapped, eax's upper half the low word of
+			// px+4a from 0xd4df (0xd5e6 keeps eax)
+			e := uint32(p >> 2)
+			eax, _ := v.xdiv(DivSigned|DivWord, rol16(e), uint32(uint16(px+4*a))<<16|e&0xffff, 0xc)
+			q := int16(eax)
 			c := q
 			if p>>2 < 0 { // idiv leaves the flags of the sar before it
 				c = -c

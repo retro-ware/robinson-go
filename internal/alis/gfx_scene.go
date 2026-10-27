@@ -13,16 +13,41 @@ func (v *VM) getval() int16 {
 	return int16(v.varD7)
 }
 
-// operAX is the low word of eax after the last operand: 0x9d24 enters the
-// operand's routine with eax zero.
+// operAX is the low word of eax after the last operand: 0x9d2d enters the
+// operand's routine with the operand code in eax. The string forms leave
+// al 0 from their copy loop.
 func (v *VM) operAX() int16 {
+	off := v.r16(v.operPC)      // the first word operand
+	off2 := v.r16(v.operPC + 2) // ohim*: the offset after the entity
 	switch v.operCode {
-	case 0x00, 0x02, 0x06, 0x12: // oimmb, oimmw, olocb, odirb: ax = dx
+	case 0x00, 0x02, 0x06, 0x12, // byte and word forms ending in mov dx,ax
+		0x0e, 0x1a, 0x1e, 0x26, 0x32: // byte forms ending in cbw
 		return int16(v.varD7)
-	case 0x08: // olocw: the offset
-		return v.r16(v.operPC)
+	case 0x04, 0x16: // oimmp, odirp
+		return 0
+	case 0x08, 0x20: // olocw, omainw: the offset
+		return off
+	case 0x0a, 0x22: // olocp, omainp
+		return off &^ 0xff
 	case 0x14: // odirw: the byte offset
 		return int16(v.mem[v.operPC])
+	case 0x10, 0x1c, 0x28, 0x34: // word tables: 0xa0f3's last term
+		return v.tabAX
+	case 0x0c, 0x18, 0x24, 0x30: // string tables: 0xa199's, then the copy
+		return v.tabAX &^ 0xff
+	case 0x2a: // ohimb: dx, or the offset for a dead entity
+		if v.r32(uint32(int32(v.atent)+int32(v.r16(v.vramAt(int32(off)))))) > 0 {
+			return int16(v.varD7)
+		}
+		return off2
+	case 0x2c: // ohimw
+		return off2
+	case 0x2e: // ohimp
+		return off2 &^ 0xff
+	case 0x36: // opile leaves the code
+		return 0x36
+	case 0x38: // oeval (0xa75f) ends at ofin, dispatched with its code
+		return 0x3a
 	}
 	v.fatal(fmt.Sprintf("%s: eax after operand %#x is not ported", v.script.name, v.operCode))
 	return 0

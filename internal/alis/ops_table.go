@@ -264,10 +264,10 @@ func init() {
 		opcodes[i] = f
 	}
 	codesc1[0] = cnul
-	codesc1[1] = func(v *VM) { v.aud.fsound = 1 }
-	codesc1[2] = func(v *VM) { v.aud.fsound = 0 }
-	codesc1[3] = func(v *VM) { v.aud.fmusic = 1 }
-	codesc1[4] = func(v *VM) { v.aud.fmusic = 0 }
+	codesc1[1] = func(v *VM) { v.mem[dsFsound] = 1 }
+	codesc1[2] = func(v *VM) { v.mem[dsFsound] = 0 }
+	codesc1[3] = func(v *VM) { v.mem[dsFmusic] = 1 }
+	codesc1[4] = func(v *VM) { v.mem[dsFmusic] = 0 }
 	codesc1[5] = cdelfilm
 	codesc1[6] = copenfilm
 }

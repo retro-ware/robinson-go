@@ -30,6 +30,7 @@ func main() {
 	setup := flag.String("stp", "RBVVSBP1J0M1KQ", "START.STP contents for a new drive C:")
 	pngDir := flag.String("png", "", "write the screen at every -every'th draw to this directory")
 	every := flag.Int("every", 50, "draws between -png frames")
+	sbLog := flag.String("sblog", "", "log the end tick and CRC of every Sound Blaster block (as rrqharness -sblog)")
 	frames := flag.String("frames", "", "log tick, screen and palette CRC at every draw (as rrqharness -frames)")
 	input := flag.String("input", "", "input script (as rrqharness -input)")
 	trace := flag.String("trace", "", "comma separated code addresses: log the registers there")
@@ -40,6 +41,7 @@ func main() {
 	vars := flag.String("vars", "", "write the scripts' state at draw -varsdraw to this file (as rrqharness -vars)")
 	varsDraw := flag.Int("varsdraw", 0, "draw for -vars")
 	dsDump := flag.String("dsdump", "", "write the data segment at draw -varsdraw to this file")
+	cd := flag.String("cd", "orig/cd", "game data directory (drive D:)")
 	flag.Parse()
 
 	if *save == "" {
@@ -51,7 +53,7 @@ func main() {
 	}
 	m, err := orig.New(orig.Config{
 		Image: "orig/start32.bin",
-		CD:    "orig/cd",
+		CD:    *cd,
 		Save:  *save,
 		Log:   os.Stderr,
 		Calls: *calls,
@@ -73,7 +75,7 @@ func main() {
 		addr, err := strconv.ParseUint(a, 0, 32)
 		check(err)
 		check(m.Hook(uint32(addr), func() {
-			fmt.Fprintf(os.Stderr, "trace tick %d %s", m.D32(0x16058), m.Regs())
+			fmt.Fprintf(os.Stderr, "trace tick %d ms %.3f %s", m.D32(0x16058), m.Ms(), m.Regs())
 			for _, p := range peeks {
 				fmt.Fprintf(os.Stderr, " [%#x]=%#x", p, m.D32(p))
 			}
@@ -126,6 +128,16 @@ func main() {
 		draws++
 	}
 	err = m.Run(uint64(*ms * 1193182 / 1000))
+	if *sbLog != "" {
+		f, err := os.Create(*sbLog)
+		check(err)
+		w := bufio.NewWriter(f)
+		for i, b := range m.SBBlocks() {
+			fmt.Fprintf(w, "block %d t %d rate %d n %d crc %08x\n", i, b.T, b.Rate, len(b.Data), crc32.ChecksumIEEE(b.Data))
+		}
+		check(w.Flush())
+		f.Close()
+	}
 	fmt.Fprintf(os.Stderr, "stopped: err=%v draws=%d config=%#x cdspeed=%d unknown ports=%#x\n",
 		err, draws, m.D16(0x16062), m.D32(0x18abc), m.UnknownPorts())
 }

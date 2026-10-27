@@ -339,11 +339,6 @@ func (v *VM) fill(di uint16, esi uint32) {
 	}
 }
 
-// blitMap is 0x12c16: the map sprites.
-func (v *VM) blitMap(di uint16, esi uint32) {
-	v.fatal("draw: map sprites (START.EXE 0x12c16) are not ported")
-}
-
 // clearWindow is 0x124f9: the rectangle 0x15fcc of the work screen to 0,
 // in dwords; a width that is not a multiple of 4 shifts the rows.
 func (v *VM) clearWindow() {

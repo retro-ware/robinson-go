@@ -39,8 +39,8 @@ func cchartmap(v *VM) {
 	v.w32(addr-0x3ba, int32(v.readVaddr()))
 }
 
-// chartClear clears the chart bits covered by a square of the given radius
-// around (wcx, wcy).
+// chartClear is 0x4f14: it clears the chart bits covered by a square of the
+// given radius around the script's position (es:[ebp], es:[ebp+8]).
 func (v *VM) chartClear(addr uint32, radius int16) {
 	if radius < 0 {
 		radius = 0
@@ -50,6 +50,8 @@ func (v *VM) chartClear(addr uint32, radius int16) {
 	cellH := int32(v.r16(ed - 0x3f2))
 	maxCols := v.r16(ed - 0x3e8)
 	maxRows := v.r16(ed - 0x3e6)
+	vram := v.script.vramOrg
+	x, y := v.r16(vram+scrWCX), v.r16(vram+scrWCY)
 	clamp := func(d int32, max int16) int16 {
 		r := int16(d)
 		if d < 0 {
@@ -60,10 +62,10 @@ func (v *VM) chartClear(addr uint32, radius int16) {
 		}
 		return r
 	}
-	minCol := clamp(int32(v.wcx-radius)/cellW, maxCols)
-	maxCol := clamp(int32(v.wcx+radius)/cellW, maxCols)
-	minRow := clamp(int32(v.wcy-radius)/cellH, maxRows)
-	maxRow := clamp(int32(v.wcy+radius)/cellH, maxRows)
+	minCol := clamp(int32(x-radius)/cellW, maxCols)
+	maxCol := clamp(int32(x+radius)/cellW, maxCols)
+	minRow := clamp(int32(y-radius)/cellH, maxRows)
+	maxRow := clamp(int32(y+radius)/cellH, maxRows)
 	shx := uint16((v.r16(addr-0x3c0) - 4) - v.r16(ed-0x3c0))
 	minX := uint16(minCol >> (shx & 0x3f))
 	maxX := uint16(maxCol >> (shx & 0x3f))
