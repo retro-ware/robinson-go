@@ -461,5 +461,11 @@ func caim(v *VM) {
 }
 
 func cpointpix(v *VM) {
-	v.fatal("cpointpix: START.EXE 0x9a5b (land) is not ported")
+	v.getval()
+	v.readexecOpernameSaveD6()
+	v.pointpix(int16(v.varD7), int16(v.varD6))
+	for _, a := range []uint32{0x1aae8, 0x1aaea, 0x1aaec, 0x1aaee, 0x1aaf0, 0x1aaf2} {
+		v.varD7 = int32(v.r16(a))
+		v.cstoreContinue()
+	}
 }

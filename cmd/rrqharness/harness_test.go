@@ -30,7 +30,7 @@ func TestFramesMatchOriginal(t *testing.T) {
 		name  string
 		input string
 		maxMs int
-	}{{"intro90", "", 90000}} {
+	}{{"intro90", "", 90000}, {"start60", "start.txt", 60000}} {
 		t.Run(tc.name, func(t *testing.T) {
 			td, _ := filepath.Abs(filepath.Join("..", "..", "testdata"))
 			tmp := t.TempDir()

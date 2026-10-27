@@ -126,21 +126,30 @@ func (v *VM) texOrigin(entry, bm uint32) {
 	v.wu16(bm+4, texmasks[i-1]+uint16(yorigin))
 }
 
+// calloctab (0x48c8) gives a table variable its memory, from memalloc
+// with its start rounded up to 0x800.
 func calloctab(v *VM) {
 	cell := v.readVaddr()
-	if int8(v.mem[cell-1]) >= 0 || v.r32(cell) != 0 {
+	n := int8(v.mem[cell-1])
+	if n >= 0 {
 		return
 	}
-	size := v.r32(cell - 6 - uint32(v.mem[cell-1]&0xf)*4)
-	v.w32(cell, v.ioMalloc(size))
+	size := v.ru32(cell - uint32(n&0xf)*4 - 6)
+	h := uint32(v.ioMalloc(int32(size + 0x800)))
+	v.wu32(h, (v.ru32(h)+0x7ff)&^0x7ff)
+	v.wu32(cell, h)
 }
 
+// cfreetab (0x4906) frees it.
 func cfreetab(v *VM) {
 	cell := v.readVaddr()
-	h := v.r32(cell)
-	if int8(v.mem[cell-1]) >= 0 || h == 0 {
+	if int8(v.mem[cell-1]) >= 0 {
 		return
 	}
-	v.w32(cell, 0)
-	v.ioMfree(h)
+	h := v.ru32(cell)
+	if h == 0 {
+		return
+	}
+	v.wu32(cell, 0)
+	v.ioMfree(int32(h))
 }

@@ -385,7 +385,7 @@ func (v *VM) mv2Soundcal(vc *mv2Voice, dst []int16, first bool) {
 		return
 	}
 	smpend := sample + 0x10 + v.ru32(sample+2) - 0x11
-	if smpend > v.finmem || startsam1 < sample+0x10 || startsam1 > smpend {
+	if smpend > v.finmem() || startsam1 < sample+0x10 || startsam1 > smpend {
 		return
 	}
 	for i := range dst {

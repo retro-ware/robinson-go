@@ -285,7 +285,7 @@ func (v *VM) progEnd(index int16) uint32 {
 		}
 	}
 	if dataEnd == 0xfffffff {
-		dataEnd = v.finprog
+		dataEnd = v.finprog()
 	}
 	return dataEnd
 }
@@ -656,10 +656,10 @@ func (v *VM) killent(ent uint16) {
 // shrinkprog removes length bytes of program memory at start and relocates
 // everything that points behind it.
 func (v *VM) shrinkprog(start, length int32, id uint16) {
-	if int32(v.finprog)-length > start {
-		copy(v.mem[start:], v.mem[start+length:int32(v.finprog)])
+	if int32(v.finprog())-length > start {
+		copy(v.mem[start:], v.mem[start+length:int32(v.finprog())])
 	}
-	v.finprog -= uint32(length)
+	v.setFinprog(v.finprog() - uint32(length))
 
 	v.audioRelocate(uint32(start), uint32(start+length), -length)
 

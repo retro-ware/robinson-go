@@ -53,11 +53,11 @@ func (v *VM) w32wc(base, off uint32, val int32) {
 // that points to it. Without a free handle the block stays taken.
 func (v *VM) ioMalloc(rawsize int32) int32 {
 	size := ((uint32(rawsize) - 1) | 3) + 9
-	blockloc := v.finmem - size
-	if blockloc < v.finprog {
+	blockloc := v.finmem() - size
+	if blockloc < v.finprog() {
 		return 0
 	}
-	v.finmem = blockloc
+	v.setFinmem(blockloc)
 	v.wu32(blockloc, size)
 	for i := uint32(0); i < 0x10; i++ {
 		if h := tabptr + i*8; v.ru32(h) == 0 {
@@ -74,7 +74,19 @@ func (v *VM) ioMalloc(rawsize int32) int32 {
 func (v *VM) ioMfree(addr int32) {
 	blockloc := v.ru32(uint32(addr)+4) - 8
 	v.wu32(uint32(addr), 0)
-	if v.finmem == blockloc {
-		v.finmem += v.ru32(blockloc)
+	if v.finmem() == blockloc {
+		v.setFinmem(v.finmem() + v.ru32(blockloc))
 	}
 }
+
+// finmem (0x15f26) is the bottom of the blocks taken from the top of
+// memory, finprog (0x15f66) the end of the loaded scripts.
+const (
+	dsFinmem  = 0x15f26
+	dsFinprog = 0x15f66
+)
+
+func (v *VM) finmem() uint32      { return v.ru32(dsFinmem) }
+func (v *VM) setFinmem(x uint32)  { v.wu32(dsFinmem, x) }
+func (v *VM) finprog() uint32     { return v.ru32(dsFinprog) }
+func (v *VM) setFinprog(x uint32) { v.wu32(dsFinprog, x) }

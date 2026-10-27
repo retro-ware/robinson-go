@@ -95,11 +95,12 @@ func (v *VM) init() {
 	if !v.loadData() {
 		return
 	}
-	v.finmem = memTop // 0x15f26
+	v.setFinmem(memTop) // 0x15f26
 	v.wu32(0x15f2a, memTop)
 	v.wu32(0x15f22, progBase-gameWidth*gameHeight)
 	v.initScreens()
 	v.wu32(0x15f22, progBase)
+	v.landTables() // 0x1bf7
 
 	v.fswitch = 1 // dbl_buf
 	v.fallent = 0
@@ -196,11 +197,11 @@ func (v *VM) loadMain() {
 	finsprit := debsprit + ((v.specs.vramToDataOffset+3)*0x30 | 0xf) + 1
 	v.wu32(dsFinsprit, finsprit)
 	v.debprog = finsprit
-	v.finprog = finsprit
+	v.setFinprog(finsprit)
 	v.dernprog = v.atprog
 	v.maxprog = v.specs.scriptDataTabLen
-	if top := finsprit + v.specs.memCap; top <= v.finmem {
-		v.finmem = top
+	if top := finsprit + v.specs.memCap; top <= v.finmem() {
+		v.setFinmem(top)
 	}
 	v.mem[0x16077] = 0xff
 	v.wu16(0x15f38, 0xffff)

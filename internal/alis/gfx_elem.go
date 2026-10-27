@@ -519,7 +519,7 @@ func copensc(v *VM) {
 	v.scbreak(id)
 	v.scadd(id)
 	if v.mem[a+1]&2 != 0 {
-		v.openland(id)
+		v.openland(a)
 	}
 }
 

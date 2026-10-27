@@ -240,6 +240,7 @@ func (v *VM) inisprit() {
 	}
 	v.debsprit = v.ru32(dsDebsprit)
 	v.wu32(dsFsBase, v.debsprit)
+	v.setFs(v.debsprit)
 	si := uint16(2)
 	v.wu16(dsTvsprite, si)
 	v.setFsu16(si, spNewx, 0)

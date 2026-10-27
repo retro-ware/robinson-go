@@ -73,7 +73,7 @@ func TestInitArenaEqual(t *testing.T) {
 // scratch fills the same random bytes into both arenas below finmem and
 // returns the region's start.
 func scratch(v *VM, r *rand.Rand, n int) uint32 {
-	at := v.finmem - uint32(n) - 0x100
+	at := v.finmem() - uint32(n) - 0x100
 	c := cref.Mem()
 	for i := range n {
 		b := byte(r.IntN(256))

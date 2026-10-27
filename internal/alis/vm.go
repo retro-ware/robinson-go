@@ -108,7 +108,6 @@ type VM struct {
 
 	atprog   uint32
 	debprog  uint32
-	finprog  uint32
 	dernprog uint32
 	maxprog  uint16
 	nbprog   uint16
@@ -121,7 +120,6 @@ type VM struct {
 	nbent   int16
 	dernent int16
 
-	finmem   uint32
 	basevar  int32
 	basemain uint32
 	debsprit uint32 // sprite segment (fs base, 0x15f8c)

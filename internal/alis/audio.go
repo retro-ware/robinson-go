@@ -239,7 +239,7 @@ func (v *VM) audioRelocate(lo, hi uint32, delta int32) {
 	}
 	for i := range a.channels {
 		c := &a.channels[i]
-		if c.addr < lo || c.addr >= v.finmem {
+		if c.addr < lo || c.addr >= v.finmem() {
 			continue
 		}
 		if at := moved(c.addr, lo, hi, delta); at != 0 {

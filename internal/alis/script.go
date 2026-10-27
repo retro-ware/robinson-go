@@ -150,15 +150,15 @@ func (v *VM) scriptInit(name string, data []byte) *scriptData {
 		wUnknown7:     le16(data[22:]),
 	}
 
-	s.dataOrg = v.finprog
-	if s.dataOrg > v.finmem || uint32(len(data)) > v.finmem-s.dataOrg {
+	s.dataOrg = v.finprog()
+	if s.dataOrg > v.finmem() || uint32(len(data)) > v.finmem()-s.dataOrg {
 		v.fatal("Out of game memory loading " + name)
 		return nil
 	}
 	copy(v.mem[s.dataOrg:], data)
 
 	ins := v.searchInsert(int(v.nbprog), int(s.header.id))
-	v.finprog += uint32(len(data))
+	v.setFinprog(v.finprog() + uint32(len(data)))
 	v.dernprog += 4
 	v.nbprog++
 	for i := int(v.nbprog) - 2; i >= ins; i-- {

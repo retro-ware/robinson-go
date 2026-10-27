@@ -288,7 +288,7 @@ func (v *VM) ioDfree() int16 { return 32000 } // KB free for saves (capped as th
 func ofree(v *VM) {
 	switch d := v.varD7; {
 	case d == 0: // 0x29fb
-		v.varD7 = int32(int16((v.finmem - v.finprog) / 1000))
+		v.varD7 = int32(int16((v.finmem() - v.finprog()) / 1000))
 	case d == 1: // 0x2a15
 		v.varD7 = int32(int16((v.ru32(dsDebsprit) - v.finent) / 1000))
 	case d == 2:
