@@ -7,6 +7,7 @@ import (
 	"bufio"
 	"cmp"
 	"encoding/binary"
+	"errors"
 	"flag"
 	"fmt"
 	"hash/crc32"
@@ -285,6 +286,10 @@ func main() {
 		n++
 	}
 	if err := vm.Run(); err != nil {
+		var e *alis.Error
+		if errors.As(err, &e) {
+			fmt.Fprint(os.Stderr, e.Report())
+		}
 		log.Print(err)
 	}
 }

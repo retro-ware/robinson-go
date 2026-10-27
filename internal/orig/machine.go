@@ -208,6 +208,9 @@ func (m *Machine) Run(limit uint64) error {
 			if m.pmVec[n].sel == selStub {
 				return fmt.Errorf("unhandled exception %d at eip %#x", n, eip)
 			}
+			if err := m.e.clearOldException(); err != nil {
+				return err
+			}
 			eip = m.deliver(n, eip)
 			continue
 		}

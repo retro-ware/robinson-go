@@ -40,6 +40,12 @@ static uc_err hook_write(uc_engine *uc, uc_hook *h, uintptr_t user, uint64_t beg
 	return uc_hook_add(uc, h, UC_HOOK_MEM_WRITE, goHookWrite, (void *)user, begin, end);
 }
 static uc_err flush_tb(uc_engine *uc) { return uc_ctl_flush_tb(uc); }
+// ctx_len and ctx_data are the CPU state in a saved context: the context
+// is a header and the state, whose size is the header's first field.
+static size_t ctx_len(uc_context *c) { return *(size_t *)c; }
+static char *ctx_data(uc_engine *uc, uc_context *c) {
+	return (char *)c + (uc_context_size(uc) - ctx_len(c));
+}
 static uc_err set_mmr(uc_engine *uc, int reg, uint64_t base, uint32_t limit) {
 	uc_x86_mmr m = {0, base, limit, 0};
 	return uc_reg_write(uc, reg, &m);
@@ -189,6 +195,24 @@ func (e *engine) start(eip uint32) error {
 func (e *engine) stop() { C.uc_emu_stop(e.uc) }
 
 func (e *engine) flushTB() { C.flush_tb(e.uc) }
+
+// editCPUState calls f on a copy of unicorn's CPU state (QEMU's
+// CPUX86State) and writes it back.
+func (e *engine) editCPUState(f func(b []byte) error) error {
+	var c *C.uc_context
+	if err := ucCheck(C.uc_context_alloc(e.uc, &c)); err != nil {
+		return err
+	}
+	defer C.uc_context_free(c)
+	if err := ucCheck(C.uc_context_save(e.uc, c)); err != nil {
+		return err
+	}
+	b := unsafe.Slice((*byte)(unsafe.Pointer(C.ctx_data(e.uc, c))), int(C.ctx_len(c)))
+	if err := f(b); err != nil {
+		return err
+	}
+	return ucCheck(C.uc_context_restore(e.uc, c))
+}
 
 //export goHookIntr
 func goHookIntr(uc *C.uc_engine, intno C.uint32_t, user unsafe.Pointer) {

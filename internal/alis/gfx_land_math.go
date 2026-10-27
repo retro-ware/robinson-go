@@ -45,7 +45,8 @@ func posDiv(a, b int16) int32 {
 // which runs again until its quotient fits. With bit 2 of the ModRM byte
 // clear (idiv bx/cx/ebx/ecx, div bx/cx) all of edx:eax shifts, logically;
 // with it set (memory operands, si, di, bp) only dx:ax, arithmetically,
-// also for div. A division by zero faults for ever: the original hangs.
+// also for div. A division by zero faults for ever: the original hangs
+// (see divHang).
 const (
 	DivSigned = 1 << iota // idiv
 	DivWord               // dx:ax by a word
@@ -57,9 +58,21 @@ const (
 func (v *VM) xdiv(k int, edx, eax, d uint32) (uint32, uint32) {
 	eax, edx, ok := DivRetry(k, edx, eax, d)
 	if !ok {
-		v.fatal("division by zero: START.EXE's divide error handler 0x20d9 retries it for ever")
+		v.divHang()
 	}
 	return eax, edx
+}
+
+// divHang is a division by zero: 0x20d9 retries it for ever with
+// interrupts on, so only the timer, sound and mouse interrupts still run
+// and the screen stays as it is. It returns only when the VM stops.
+func (v *VM) divHang() {
+	if v.OnHang != nil {
+		v.OnHang(v.newError("division by zero: START.EXE hangs here", nil))
+	}
+	for v.state != stateStopped {
+		v.waitTick()
+	}
 }
 
 // DivRetry is xdiv without the VM (the oracle's tests check it against
@@ -218,8 +231,8 @@ func (v *VM) landPersp3(ax, bx, cx, dx int16) (x1, x2, depth int16) {
 	bp := (mul16(ax, c) + mul16(bx, s)) >> 9
 	b := (mul16(cx, c) + mul16(dx, s)) >> 9
 	d := int32(int16(edi) + v.gs16(0x854))
-	if d == 0 {
-		v.fatal("land: division by zero at 0xcc78; START.EXE retries it for ever")
+	if d == 0 { // cdq; idiv ecx (0xcc78) by zero
+		v.divHang()
 		return
 	}
 	x2 = clamp16(mul16(v.gs16(0x856), int16(b)) / d)

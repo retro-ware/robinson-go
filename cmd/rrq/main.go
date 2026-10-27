@@ -168,6 +168,7 @@ func main() {
 	})
 
 	done := make(chan error, 1)
+	vm.OnHang = func(e *alis.Error) { crashReport(e, saveDir) }
 	go func() { done <- vm.Run() }()
 
 	frame := make([]uint32, screenW*screenH)
@@ -176,7 +177,7 @@ func main() {
 		select {
 		case err := <-done:
 			if err != nil {
-				log.Print(err)
+				crashReport(err, saveDir)
 			}
 			return
 		default:

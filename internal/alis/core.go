@@ -2,6 +2,7 @@ package alis
 
 import (
 	"fmt"
+	"runtime/debug"
 	"strings"
 )
 
@@ -9,7 +10,10 @@ import (
 // (alis alis.c).
 
 // Error is a fatal VM error (alis_error).
-type Error struct{ Msg string }
+type Error struct {
+	Msg    string
+	report string // see Report
+}
 
 func (e *Error) Error() string { return e.Msg }
 
@@ -38,7 +42,7 @@ func (v *VM) alisError(code int) {
 
 func (v *VM) fatal(msg string) {
 	if v.err == nil {
-		v.err = &Error{msg}
+		v.err = v.newError(msg, nil)
 	}
 	v.state = stateStopped
 	if v.script != nil {
@@ -316,15 +320,17 @@ func (v *VM) strncmpA(a, b uint32) int {
 // ---------------------------------------------------------------------------
 // accumulator stack
 
+// The stack holds words (START.EXE ebx): push keeps the low word, pop
+// sign-extends it.
 func (v *VM) push(x int32) {
-	v.acc -= 4
-	v.w32(v.acc, x)
+	v.acc -= 2
+	v.w16(v.acc, int16(x))
 }
 
 func (v *VM) pop() int32 {
-	x := v.r32(v.acc)
-	v.acc += 4
-	return x
+	x := v.r16(v.acc)
+	v.acc += 2
+	return int32(x)
 }
 
 // ---------------------------------------------------------------------------
@@ -347,6 +353,7 @@ func (v *VM) badOp(table string, code uint8) {
 
 func (v *VM) readexecOpcode() {
 	code := v.read8()
+	v.trace.add(opRec{v.script.name, v.script.pc - 1, code, v.timeclock})
 	if f := opcodes[code]; f != nil {
 		f(v)
 		return
@@ -450,8 +457,8 @@ func (v *VM) entscr(ent uint16) *scriptLive { return v.liveScripts[ent/6] }
 func (v *VM) Run() (err error) {
 	defer func() {
 		if r := recover(); r != nil {
-			err = fmt.Errorf("alis: %v (script %s pc 0x%x)", r, v.scriptName(), v.scriptPC())
-			panic(err)
+			v.state = stateStopped
+			err = v.newError(fmt.Sprintf("panic: %v", r), debug.Stack())
 		}
 	}()
 	v.state = stateRunning

@@ -511,11 +511,18 @@ func (v *VM) filmAudio(b []byte, typ uint16) {
 	f.speech ^= 1
 	copy(v.sb.film[f.speech][:], b)
 	n := uint32(len(b))
-	if f.waitclock == 0 {
-		v.fatal("film: speech with a zero frame time divides by zero (START.EXE 0x14254)")
+	if f.waitclock == 0 { // div bx at 0x14254 by zero
+		v.divHang()
 		return
 	}
-	freq := uint16(60 * uint32(uint16(n)) / uint32(uint16(f.waitclock)))
+	q := 60 * uint32(uint16(n)) / uint32(uint16(f.waitclock))
+	if q > 0xffff {
+		// the handler's retries shift in edx's upper half, which comes from
+		// before the film opcode and isn't modelled
+		v.fatal("film: the speech rate overflows div at 0x14254")
+		return
+	}
+	freq := uint16(q)
 	if v.sbFilmPush(f.ch, sbFilmBase+uint32(f.speech)*0x10000, n, freq) {
 		// meant to set the film's 0x64 (skip the frame wait), but edi
 		// points at the mixer channel by then

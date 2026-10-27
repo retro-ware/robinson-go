@@ -110,11 +110,14 @@ func (v *VM) landSky(a uint32) {
 	ax := int16(uint16(p>>8)&0xff | uint16(p>>16)<<8)
 	ax -= v.r16(dsFenx1)
 	bx := int16(v.ru16(esi+2) + 1)
-	if bx == 0 || ax == -0x8000 && bx == -1 {
-		// cwd; idiv bx faults only for a sky width of 0xffff (a division
-		// by zero, which hangs the original) or 0xfffe with ax -32768, whose
-		// retries shift in the upper halves of the caller's eax and edx
-		v.fatal("land: the sky's division at 0xf2ac faults (width 0xfffe or 0xffff)")
+	if bx == 0 { // cwd; idiv bx (0xf2ac): a sky width of 0xffff
+		v.divHang()
+		return
+	}
+	if ax == -0x8000 && bx == -1 {
+		// width 0xfffe: the retries shift in edx's upper half, which comes
+		// from before the land opcode and isn't modelled
+		v.fatal("land: the sky's division at 0xf2ac overflows (width 0xfffe)")
 		return
 	}
 	dx := -int16(int32(ax) % int32(bx))

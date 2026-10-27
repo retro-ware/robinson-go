@@ -95,8 +95,8 @@ func cputmap(v *VM) {
 	v.w16(m-0x3de, v.getval())
 	v.w16(dsNumelem, v.getval())
 	w := v.ru16(m - 0x3f0)
-	if w == 0 {
-		v.fatal("cputmap: division by zero at 0x4bab; START.EXE retries it for ever")
+	if w == 0 { // div word at 0x4bab by zero
+		v.divHang()
 		return
 	}
 	v.wu16(m-0x3d2, v.ru16(m-0x3de)%w)

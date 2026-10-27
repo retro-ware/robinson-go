@@ -205,6 +205,8 @@ func (v *VM) odivide(quot bool) {
 		d = 1
 	}
 	if a == -0x8000 && d == -1 {
+		// the retries of idiv cx shift in edx's upper half, which the port's
+		// D7 (sign-extended) doesn't model
 		v.fatal("omod/odiv: -32768 / -1 overflows idiv (START.EXE 0xa31b)")
 		return
 	}
@@ -259,8 +261,8 @@ func okeyon(v *VM) {}
 func ojoy(v *VM) { v.varD7 = 0 }
 
 func oprnd(v *VM) {
-	result := uint32(v.pop())
-	result = uint32(uint16(result<<10 | result>>6))
+	result := uint32(uint16(v.pop()))
+	result = uint32(uint16(result<<10 | result>>6)) // ror ax, 6 (0xa3ec)
 	result = uint32(uint16(result*0x7ab7 - 0x77f))
 	result = uint32(v.varD7&0xffff) * result
 	v.varD7 = int32(result*0x10000 | result>>16)

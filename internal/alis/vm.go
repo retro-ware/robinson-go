@@ -17,7 +17,7 @@ const (
 	ramSize    = 4 << 20 // textured RRQ: 4 MB arena
 	contextSz  = 0x3e    // script context bytes below vram_org
 
-	kAccOrg        = 0x19c00 // virtual accumulator stack (s32 cells)
+	kAccOrg        = 0x18328 // accumulator stack, growing down (START.EXE ebx, 0x9d24); word cells
 	kSpriteMemSize = 0x20000
 	sprSz          = 0x36 // alis sprite record size
 
@@ -229,9 +229,14 @@ type VM struct {
 	basedark uint16
 	ptrdark  uint32
 
-	img      image
-	sb       sbState
-	film     film
+	img   image
+	sb    sbState
+	film  film
+	trace opTrace // the last opcodes, for crash reports
+
+	// OnHang, when set, gets the crash report of a division by zero, after
+	// which the VM hangs as START.EXE does.
+	OnHang   func(*Error)
 	filmnode uint16
 
 	px1, py1, pz1, px2, py2, pz2 int16

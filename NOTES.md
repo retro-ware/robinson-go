@@ -203,4 +203,25 @@ Reproduce: `go build -tags orig -o X/origrun ./cmd/origrun`, run from the repo r
 - [x] operAX (cscfollow's last operand, gfx_scene.go) covers every operand form; oeval
       (0x38) always leaves 0x3a, the code of the ofin (0xa767) that ends its loop.
       Table forms take ax from tabint/tabstring's last term (tabAX, 0xa0f3/0xa199).
+- [x] Divide errors: START.EXE hooks interrupt 0 (0x2045 installs 0x20d9). The handler
+      shifts the dividend right by 2 and re-runs the division: all of edx:eax (logical) when
+      ModRM bit 2 is clear (idiv bx/cx/ebx/ecx, div bx/cx), only dx:ax (arithmetic) when it's
+      set (memory operands, si, di, bp). A zero divisor retries for ever (the original hangs).
+      The port's model is xdiv/DivRetry (gfx_land_math.go), used by every land division,
+      draw's idiv16 (0x5990) and cdefmap. 16-bit sites in mode A also shift in the upper
+      halves of eax/edx, so landPersp/landPersp2/landFA29/0xd527/0xee9c take them from their
+      callers. A zero divisor hangs as in the original (divHang: only the interrupts run on,
+      also at 0xcc78, 0x4bab, 0x14254 and 0xf2ac). Left as fatal, because their retries shift
+      in edx's upper half from before the opcode, which the port doesn't model (D7 is kept
+      sign-extended): omod/odiv's -32768 / -1, 0xf2ac with sky width 0xfffe and ax -32768,
+      and a speech rate over 0xffff at 0x14254.
+      This was the "land: division fault" a play session hit.
+- [x] Oracle: unicorn never reset QEMU's env->old_exception when the hook took an exception,
+      so the second divide error became a double fault and the third a triple fault (CPU
+      halted). oldexc.go finds the field by probing and resets it after each exception.
+      internal/orig/div_test.go checks DivRetry against the real handler bytes (10 cases,
+      up to 16 retries each).
 - [ ] Nothing is committed yet (branch port-wip).
+- [x] Crash reports: `alis.Error.Report()` (internal/alis/crash.go) gives the message, script/pc/entity/time, the last 64 opcodes and the Go stack, for `fatal` and for Go panics recovered in `Run` (which now returns the error instead of re-panicking). cmd/rrq prints it and writes `crash-YYYYMMDD-HHMMSS.txt` to the save dir; rrqharness prints it to stderr.
+- [x] 3D freeze (division by zero in `caim` → `landAtan`): the port's accumulator stack started at 0x19c00, inside START.EXE's sine-table mirror (0x199be..0x19c8e), so pushed values and strings corrupted the tables. It now starts at 0x18328 like START.EXE's `ebx` (0x9d24); 0x18042..0x18328 is free. Divide-by-zero hangs also write a crash report (`VM.OnHang`).
+- [x] Accumulator cells are words as in START.EXE (`push` keeps the low word, `pop` sign-extends; table indices are popped with `movsx`, 0xa0a8); `oprnd` rotates the popped word (`ror ax, 6`, 0xa3ec).
