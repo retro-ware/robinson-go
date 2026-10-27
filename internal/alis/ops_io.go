@@ -7,7 +7,7 @@ import (
 // Palette, sound effect, file, pen and mouse opcodes (alis opcodes.c).
 
 func cpalette(v *VM) {
-	v.flagmain = 0
+	v.mem[dsFlagmain] = 0
 	v.readexecOpername()
 	palidx := int16(v.varD7)
 	if palidx < 0 {
@@ -401,21 +401,23 @@ func clinking(v *VM) {
 
 // cmouson shows the cursor (START.EXE 0x988a).
 func cmouson(v *VM) {
-	if !v.mouse.present || v.cursor.shown >= 0 {
+	if !v.mouse.present || int8(v.mem[dsCurShown]) >= 0 {
 		return
 	}
-	v.cursor.x, v.cursor.y, _ = v.mouseRead()
+	x, y, _ := v.mouseRead()
+	v.w16(dsCurX, x)
+	v.w16(dsCurY, y)
 	v.cursorDraw()
-	v.cursor.shown = 1
-	v.cursor.lock = 0xff
+	v.mem[dsCurShown] = 1
+	v.mem[dsCurLock] = 0xff
 }
 
 // cmousoff hides the cursor (START.EXE 0x98b1).
 func cmousoff(v *VM) {
-	if !v.mouse.present || v.cursor.shown < 0 {
+	if !v.mouse.present || int8(v.mem[dsCurShown]) < 0 {
 		return
 	}
-	v.cursor.shown = -1
+	v.mem[dsCurShown] = 0xff
 	v.cursorRestore()
 }
 
@@ -430,12 +432,18 @@ func cmouse(v *VM) {
 	v.cstoreContinue()
 }
 
-// cdefmouse sets the cursor sprite (START.EXE 0x98f1).
+// cdefmouse sets the cursor sprite, and the mouse sprite's resource
+// (START.EXE 0x98f1).
 func cdefmouse(v *VM) {
-	v.flagmain = 0
+	v.mem[dsFlagmain] = 0
 	v.readexecOpername()
-	addr := uint32(v.adresdes(v.varD7))
-	v.cursor.sprite = addr + uint32(v.r32(addr))
+	entry, ok := v.resentry(uint16(v.varD7))
+	if !ok {
+		return
+	}
+	v.wu32(0x15eb6, entry)
+	v.wu32(dsCurSprite, entry+v.ru32(entry))
+	v.setFsu32(v.ru16(dsMouseSpr), spNewad, entry)
 }
 
 // csetmouse (START.EXE 0x9a22): x by getval, y by 0x9d17, which leaves it

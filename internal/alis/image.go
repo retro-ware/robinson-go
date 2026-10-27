@@ -2,7 +2,6 @@ package alis
 
 // image is the display state (alis sImage, PC fields only).
 type image struct {
-	landImage
 	spritemem []byte
 	physic    []byte
 	logic     []byte

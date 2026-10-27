@@ -164,14 +164,15 @@ func (v *VM) flinext(addr int) {
 	v.fliElements(addr + 16)
 	dx, dy := int(v.img.fenx1), int(v.img.feny1)
 	fw := int(f.width)
+	physic := v.mem[v.ru32(dsPhysic):][:gameWidth*gameHeight]
 	for y := range int(f.height) {
 		row := dy + y
 		if row < 0 || row >= gameHeight || dx < 0 || dx+fw > gameWidth {
 			continue
 		}
-		copy(v.img.physic[row*gameWidth+dx:row*gameWidth+dx+fw], f.vga[y*fw:])
+		copy(physic[row*gameWidth+dx:row*gameWidth+dx+fw], f.vga[y*fw:])
 	}
-	copy(v.img.logic, v.img.physic)
+	copy(v.mem[v.ru32(dsLogic):], physic)
 	f.addr1 = f.endframe
 	f.frame++
 }

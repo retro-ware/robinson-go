@@ -51,7 +51,7 @@ func cvprint(v *VM) {
 func csprinti(v *VM) {
 	v.charmode = 0
 	for c := v.read8(); c != 0; c = v.read8() {
-		v.putChar(int8(c))
+		v.putChar(uint8(c))
 	}
 }
 
@@ -230,53 +230,6 @@ func casleep(v *VM) {
 	}
 }
 
-func (v *VM) scrAdd16(idx uint16, off uint32, x int16) {
-	v.add16(v.sca(idx)+off, x)
-	v.setScrState(idx, v.scrState(idx)|-0x80)
-}
-
-func cscmov(v *VM) {
-	v.readexecOpernameSaveD7()
-	x := int16(v.varD7)
-	v.readexecOpernameSaveD7()
-	y := int16(v.varD7)
-	v.readexecOpernameSaveD7()
-	z := int16(v.varD7)
-	idx := v.curScreenID()
-	if z != 0 {
-		v.scrAdd16(idx, scDepz, z)
-	}
-	if y != 0 {
-		v.scrAdd16(idx, scDepy, y)
-	}
-	if x != 0 {
-		v.scrAdd16(idx, scDepx, x)
-	}
-}
-
-func cscset(v *VM) {
-	v.readexecOpername()
-	x := int16(v.varD7)
-	v.readexecOpername()
-	y := int16(v.varD7)
-	v.readexecOpername()
-	z := int16(v.varD7)
-	idx := v.curScreenID()
-	a := v.sca(idx)
-	if z != v.r16(a+scDepz) {
-		v.w16(a+scDepz, z)
-		v.setScrState(idx, v.scrState(idx)|-0x80)
-	}
-	if y != v.r16(a+scDepy) {
-		v.w16(a+scDepy, y)
-		v.setScrState(idx, v.scrState(idx)|-0x80)
-	}
-	if x != v.r16(a+scDepx) {
-		v.w16(a+scDepx, x)
-		v.setScrState(idx, v.scrState(idx)|-0x80)
-	}
-}
-
 func cclipping(v *VM)  { v.fswitch = 0 }
 func cswitching(v *VM) { v.fswitch = 1 }
 
@@ -385,6 +338,9 @@ func (v *VM) clivin() {
 
 	if prog != nil {
 		s := v.scriptLive(prog)
+		if s == nil {
+			return
+		}
 		prev := v.script.vramOrg
 		next := s.vramOrg
 		cp32 := func(o uint32) { v.w32(next+o, v.r32(prev+o)) }
@@ -472,99 +428,6 @@ func lastDot(s string) int {
 	return -1
 }
 
-func cdefsc(v *VM) {
-	idx := uint16(v.read16())
-	v.setScrState(idx, v.scrState(idx)|0x40)
-	a := v.sca(idx)
-	v.mem[a+scNumelem] = v.read8()
-	v.wu16(a+scScreenID, v.img.libsprit)
-	for i := uint32(0); i < 32; i++ {
-		v.mem[a+6+i] = v.read8()
-	}
-
-	sp := v.spr(v.img.libsprit)
-	sp.setLink(0)
-	sp.setNumelem(int8(v.mem[a+scNumelem]))
-	x := v.r16(a + scNewx)
-	y := v.r16(a + scNewy)
-	w := v.r16(a + scWidth)
-	h := v.r16(a + scHeight)
-	sp.setNewx(x)
-	sp.setNewy(y)
-	sp.setNewd(0x7fff)
-	sp.setDepx(x + w)
-	sp.setDepy(y + h)
-
-	v.img.libsprit = sp.toNext()
-	v.wu16(a+scToNext, 0)
-	v.scdosprite(idx)
-	v.w16(a+0x2a, 0)
-	v.w16(a+0x2c, 0)
-	v.w16(a+0x2e, 0)
-	v.img.libsprit = sp.toNext()
-	v.scadd(idx)
-	v.vectoriel(idx)
-}
-
-func cscreen(v *VM) {
-	id := uint16(v.read16())
-	if id != v.curScreenID() {
-		v.wu16(v.script.vramOrg-0x16, id)
-	}
-}
-
-func cput(v *VM) {
-	v.flagmain = 0
-	v.img.invertX = v.xinv(v.script.vramOrg)
-	v.readexecOpername()
-	v.img.depx, v.img.depy, v.img.depz = 0, 0, 0
-	v.img.numelem = 0
-	v.put(uint16(v.varD7))
-}
-
-func cputnat(v *VM) {
-	v.flagmain = 0
-	v.img.invertX = v.xinv(v.script.vramOrg)
-	v.readexecOpernameSaveD7()
-	v.img.depx = int16(v.varD7)
-	v.readexecOpernameSaveD7()
-	v.img.depy = int16(v.varD7)
-	v.readexecOpernameSaveD7()
-	v.img.depz = int16(v.varD7)
-	v.readexecOpernameSaveD7()
-	v.readexecOpernameSaveD6()
-	v.img.numelem = int8(v.varD6)
-	v.put(uint16(v.varD7))
-}
-
-func cerase(v *VM) {
-	var cur, prev uint16
-	if v.searchtete(&cur, &prev) {
-		screen := int16(v.curScreenID())
-		for {
-			v.killelem(&cur, &prev)
-			if cur == 0 {
-				v.ferase = 0
-				return
-			}
-			if screen != v.spr(cur).screenID() {
-				break
-			}
-		}
-	}
-	v.ferase = 0
-}
-
-func cerasen(v *VM) {
-	v.readexecOpernameSaveD7()
-	v.img.numelem = int8(v.varD7)
-	var cur, prev uint16
-	for v.searchelem(&cur, &prev) {
-		v.killelem(&cur, &prev)
-	}
-	v.ferase = 0
-}
-
 func cset(v *VM) {
 	vram := v.script.vramOrg
 	v.readexecOpername()
@@ -583,32 +446,6 @@ func cmov(v *VM) {
 	v.add16(vram+scrWCY, int16(v.varD7))
 	v.readexecOpername()
 	v.add16(vram+scrWCZ, int16(v.varD7))
-}
-
-func copensc(v *VM) {
-	id := uint16(v.read16())
-	a := v.sca(id)
-	v.mem[a] &= 0xbf
-	v.mem[a] |= 0x80
-	v.scbreak(id)
-	v.scadd(id)
-	if v.mem[a+1]&2 != 0 {
-		v.openland(id)
-	}
-}
-
-func cclosesc(v *VM) {
-	id := uint16(v.read16())
-	v.mem[v.sca(id)] |= 0x40
-}
-
-func cerasall(v *VM) {
-	var tmp uint16
-	cur := v.elemHead()
-	for cur != 0 {
-		v.killelem(&cur, &tmp)
-	}
-	v.ferase = 0
 }
 
 func cforme(v *VM) {
@@ -888,27 +725,18 @@ func (v *VM) shrinkprog(start, length int32, id uint16) {
 		}
 	}
 
-	for sc := int16(v.scr.ptscreen); sc != 0; sc = int16(v.scrToNext(uint16(sc))) {
-		idx := v.scrScreenID(uint16(sc))
-		if idx == 0 {
-			continue
-		}
-		for {
-			idx = v.spr(idx).link()
-			if idx == 0 {
+	// the scenes' elements (START.EXE 0xb62f)
+	end := uint32(start + length)
+	for sc := v.ru16(dsPtscreen); sc != 0; sc = v.ru16(v.sca(sc) + 4) {
+		for bx := v.ru16(v.sca(sc) + 2); ; {
+			if bx = v.fsu16(bx, spLink); bx == 0 {
 				break
 			}
-			sp := v.spr(idx)
-			end := uint32(start + length)
-			if sp.state() == 1 || (sp.newad() >= uint32(start) && sp.newad() < end) {
-				sp.setNewad(0)
-			} else if uint32(start) < sp.newad() {
-				sp.setNewad(sp.newad() - uint32(length))
+			if a := v.fsu32(bx, spNewad); a >= end {
+				v.setFsu32(bx, spNewad, a-uint32(length))
 			}
-			if sp.data() >= uint32(start) && sp.data() < end {
-				sp.setData(0)
-			} else if uint32(start) < sp.data() {
-				sp.setData(sp.data() - uint32(length))
+			if a := v.fsu32(bx, spData); a >= end {
+				v.setFsu32(bx, spData, a-uint32(length))
 			}
 		}
 	}

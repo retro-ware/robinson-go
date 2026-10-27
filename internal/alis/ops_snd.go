@@ -3,7 +3,7 @@ package alis
 // Music and sound opcodes (alis opcodes.c).
 
 func (v *VM) music() {
-	if v.flagmain != 0 {
+	if v.mem[dsFlagmain] != 0 {
 		v.aud.musicID = v.main.data.header.id
 	} else {
 		v.aud.musicID = v.script.data.header.id
@@ -69,12 +69,12 @@ func (v *VM) music() {
 }
 
 func cmusic(v *VM) {
-	v.flagmain = 0
+	v.mem[dsFlagmain] = 0
 	v.music()
 }
 
 func cmmusic(v *VM) {
-	v.flagmain = 1
+	v.mem[dsFlagmain] = 1
 	v.music()
 }
 
@@ -153,12 +153,12 @@ func (v *VM) sound() {
 }
 
 func csound(v *VM) {
-	v.flagmain = 0
+	v.mem[dsFlagmain] = 0
 	v.sound()
 }
 
 func cmsound(v *VM) {
-	v.flagmain = 1
+	v.mem[dsFlagmain] = 1
 	v.sound()
 }
 

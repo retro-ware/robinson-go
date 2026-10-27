@@ -252,6 +252,21 @@ func invdigit(sample []byte) {
 // (START.EXE 0xb8ac).
 func (v *VM) scriptLive(prog *scriptData) *scriptLive {
 	newent := uint16(v.dernent)
+	curent := v.varD5
+	nextent := v.ru16(v.atent + uint32(curent) + 4)
+	v.wu16(v.atent+uint32(curent)+4, newent)
+	v.dernent = v.r16(v.atent + uint32(newent) + 4)
+	v.wu16(v.atent+uint32(newent)+4, nextent)
+	v.nbent++
+	if v.nbent > int16(v.maxent) {
+		v.alisError(5)
+		return nil
+	}
+	return v.scriptCreate(prog, newent)
+}
+
+// scriptCreate sets up entity newent running prog (START.EXE 0xb906).
+func (v *VM) scriptCreate(prog *scriptData, newent uint16) *scriptLive {
 	s := &scriptLive{name: prog.name, data: prog}
 	d := prog.dataOrg
 	w5 := v.r16(d + 0x12)
@@ -260,9 +275,12 @@ func (v *VM) scriptLive(prog *scriptData) *scriptLive {
 	s.vaccOff = int16(prevfin - int32(v.finent))
 	s.vramOrg = v.finent
 	vramLength := int32(v.r16(d + 0x14))
+	if s.vramOrg+uint32(vramLength) >= v.ru32(dsDebsprit) {
+		v.alisError(0xc)
+		return nil
+	}
 	clear(v.mem[s.vramOrg : s.vramOrg+uint32(vramLength)])
 
-	curent := v.varD5
 	v.varD7 = int32(newent)
 
 	o := s.vramOrg
@@ -301,15 +319,9 @@ func (v *VM) scriptLive(prog *scriptData) *scriptLive {
 	s.pc = uint32(v.r32(o - 0x08))
 	s.pcOrg = s.pc
 
-	// link right after the creator
-	nextent := v.ru16(v.atent + uint32(curent) + 4)
-	v.wu16(v.atent+uint32(curent)+4, newent)
-	v.dernent = v.r16(v.atent + uint32(newent) + 4)
-	v.wu16(v.atent+uint32(newent)+4, nextent)
 	v.w32(v.atent+uint32(newent), int32(s.vramOrg))
 
 	v.liveScripts[newent/6] = s
 	v.finent += uint32(vramLength)
-	v.nbent++
 	return s
 }

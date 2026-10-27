@@ -1,3 +1,5 @@
+//go:build ignore
+
 package alis
 
 // RRQ 3D landscape, shared part (alis render/rrq3d.c, little-endian/DOS

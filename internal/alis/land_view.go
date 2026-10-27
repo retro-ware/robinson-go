@@ -1,3 +1,5 @@
+//go:build ignore
+
 package alis
 
 // RRQ landscape: per-frame setup, sky, billboards and hit testing (alis

@@ -1,3 +1,5 @@
+//go:build ignore
+
 package alis
 
 // Scene list (alis screen.c).

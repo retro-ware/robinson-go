@@ -1,3 +1,5 @@
+//go:build ignore
+
 package alis
 
 // Sprite blitters into the 8-bit logic screen (alis image.c destofen,

@@ -88,20 +88,16 @@ type specs struct {
 // VM is the whole machine state (alis sAlisVM plus the image, audio and
 // screen globals).
 type VM struct {
-	// ShowCursor draws the game's mouse cursor into the frames (native host).
-	ShowCursor bool
 	// OnDraw, if set, runs at each draw before the frame wait.
 	OnDraw func()
 
-	host          Host
-	fs            *FileSys
-	in            Input
-	kbd           kbdState
-	mouse         mouseState
-	cursor        cursorState
-	cursorScratch [gameWidth * gameHeight]byte
-	err           *Error
-	quit          atomic.Bool
+	host  Host
+	fs    *FileSys
+	in    Input
+	kbd   kbdState
+	mouse mouseState
+	err   *Error
+	quit  atomic.Bool
 
 	clk clock // virtual time
 
@@ -128,6 +124,7 @@ type VM struct {
 	finmem   uint32
 	basevar  int32
 	basemain uint32
+	debsprit uint32 // sprite segment (fs base, 0x15f8c)
 
 	automode uint8
 	fallent  uint8
@@ -161,8 +158,6 @@ type VM struct {
 	acc    uint32 // virtual accumulator stack pointer (offset in mem)
 	accOrg uint32
 
-	flagmain uint8
-
 	// Robinson's Requiem line tables (offsets in mem)
 	pretrlinetra uint32
 	pretglinetra uint32
@@ -179,6 +174,10 @@ type VM struct {
 	varD6 int32
 	varD7 int32
 	varD5 uint16
+
+	// the last operand routine and where its operands start (operAX)
+	operCode uint8
+	operPC   uint32
 
 	// string registers (offsets in mem)
 	bsd7, bsd6, bsd7bis uint32
@@ -240,15 +239,12 @@ type VM struct {
 	img      image
 	aud      audioState
 	mv2      mv2State
-	scr      screenState
 	film     film
 	filmnode uint16
 
-	land land
 	walk walkState
 
 	px1, py1, pz1, px2, py2, pz2 int16
 
 	timeOffset int
-	starbuff   [7]int16
 }

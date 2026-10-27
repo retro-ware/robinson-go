@@ -9,7 +9,7 @@ var texmasks = [15]uint16{0, 1, 3, 7, 15, 31, 3, 127, 255, 511, 1023, 2047, 4095
 // ctexmap defines texture slot D6 of a scene: 0x20-byte entries 0xc00
 // bytes below the scene (START.EXE 0x4c50).
 func ctexmap(v *VM) {
-	v.flagmain = 0
+	v.mem[dsFlagmain] = 0
 	scene := v.readVaddr()
 	v.readexecOpernameSaveD6()
 	entry := uint32(int32(scene) + int32(int16(uint16(v.varD6)*0x20+0xf400)))
@@ -46,7 +46,9 @@ func ctexmap(v *VM) {
 		v.w16(entry+0x16, int16(v.varD7))
 		v.readexecOpername()
 		v.w16(entry+0x1a, int16(v.varD7))
-		v.w32(entry+0x10, v.calctop(scene, v.r16(entry+0x10), v.r16(entry+0x12)))
+		// 0x4dea: the texture's first cell in the map
+		top := int32(v.r16(entry+0x10))*int32(v.r16(scene-0x3ca)) + int32(v.r16(entry+0x12))
+		v.w32(entry+0x10, top*2)
 	case typ == 2:
 		v.readexecOpername()
 		v.w16(entry+0x16, int16(v.varD7))

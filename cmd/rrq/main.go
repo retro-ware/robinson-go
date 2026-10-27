@@ -69,7 +69,6 @@ func (h *host) Audio(s []int16) {
 	}
 }
 
-
 func (h *host) Time() (int, int, int) {
 	t := time.Now()
 	return t.Hour(), t.Minute(), t.Second()
@@ -116,7 +115,6 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	vm.ShowCursor = true
 
 	if err := glfw.Init(); err != nil {
 		log.Fatal(err)

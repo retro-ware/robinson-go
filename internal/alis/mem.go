@@ -48,30 +48,33 @@ func (v *VM) w32wc(base, off uint32, val int32) {
 	v.w16(base+off+2, int16(val))
 }
 
-// ioMalloc allocates a block below finmem and returns the address of a
-// pointer pair in tabptr that refers to it (v3: 32-bit handle table).
+// ioMalloc is memalloc (START.EXE 0x1c58): a block taken from the top of
+// memory, with its size in the 8 bytes before it, and a handle in tabptr
+// that points to it. Without a free handle the block stays taken.
 func (v *VM) ioMalloc(rawsize int32) int32 {
-	size := int32((uint32(rawsize)-1)|3) + 9
-	blockloc := int32(v.finmem) - size
-	if int32(v.finprog) < blockloc {
-		v.finmem = uint32(blockloc)
-		v.w32(uint32(blockloc), size)
-		for i := uint32(0); i < 0x10; i++ {
-			if v.r32(v.tabptr+i*8) == 0 {
-				v.w32(v.tabptr+i*8+0, blockloc+8)
-				v.w32(v.tabptr+i*8+4, blockloc+8)
-				return int32(v.tabptr + i*8)
-			}
+	size := ((uint32(rawsize) - 1) | 3) + 9
+	blockloc := v.finmem - size
+	if blockloc < v.finprog {
+		return 0
+	}
+	v.finmem = blockloc
+	v.wu32(blockloc, size)
+	for i := uint32(0); i < 0x10; i++ {
+		if h := tabptr + i*8; v.ru32(h) == 0 {
+			v.wu32(h, blockloc+8)
+			v.wu32(h+4, blockloc+8)
+			return int32(h)
 		}
 	}
 	return 0
 }
 
+// ioMfree is memfree (START.EXE 0x1ca2): the handle is freed; the memory
+// only if the block is the top one.
 func (v *VM) ioMfree(addr int32) {
-	blockloc := v.r32(uint32(addr) + 4)
-	v.w32(uint32(addr), 0)
-	v.w32(uint32(addr)+4, 0)
-	if int32(v.finmem) == blockloc-8 {
-		v.finmem += uint32(v.r32(v.finmem))
+	blockloc := v.ru32(uint32(addr)+4) - 8
+	v.wu32(uint32(addr), 0)
+	if v.finmem == blockloc {
+		v.finmem += v.ru32(blockloc)
 	}
 }

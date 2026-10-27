@@ -106,27 +106,6 @@ func (v *VM) chartClear(addr uint32, radius int16) {
 	}
 }
 
-func cscsky(v *VM) {
-	v.flagmain = 0
-	scr := v.basemain + uint32(v.curScreenID())
-	v.readexecOpername()
-	v.w16(scr+0xa2, int16(v.varD7))
-	v.readexecOpername()
-	v.w32(scr+0xa4, v.adresdes(v.varD7))
-	v.readexecOpername()
-	v.w16(scr+0xa8, int16(v.varD7))
-	sp := v.ru32(scr + 0xa4)
-	data := v.ru32(sp) + sp
-	if v.mem[data] == 3 {
-		sp += uint32(v.r16(data+2)) * 4
-		data = v.ru32(sp) + sp
-	}
-	w := int32(v.r16(data+2)) + 1
-	x := ((int32(v.r16(scr+0x6c)) * 4) >> 3) * 0x168 / w
-	v.wu16(scr+0xa8, uint16(((uint32(x)+0x80)&0xff00)*uint32(w)/0x168))
-	v.mem[scr] |= 0x80
-}
-
 func czoom(v *VM) {
 	v.readexecOpername()
 	v.w16(v.script.vramOrg-0x36, int16(v.varD7))

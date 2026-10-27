@@ -1,3 +1,5 @@
+//go:build ignore
+
 package alis
 
 // Sprite pool and element lists (alis image.c, "Sprite management").

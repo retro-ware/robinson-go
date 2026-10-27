@@ -4,36 +4,40 @@ import "strconv"
 
 // Text output (alis image.c put_char, put_string, valtostr).
 
-func (v *VM) putChar(c int8) {
-	img := &v.img
+// putChar is START.EXE 0x3ecf: in charmode 2 a character is a font sprite
+// of the main script put at the put offset, in the font colour if set.
+func (v *VM) putChar(c uint8) {
 	if v.charmode != 2 {
 		return // 0 prints to the DOS console, 1 is unused on the PC
 	}
 	switch c {
 	case '\n':
-		img.depz -= int16(v.fohaut)
+		v.w16(dsDepz, v.r16(dsDepz)-int16(v.fohaut))
+		return
 	case '\r':
-		img.depx = 0
+		v.wu16(dsDepx, 0)
+		return
+	case ' ':
 	default:
-		if c != ' ' {
-			if int16(v.fonum) < 0 {
-				return
-			}
-			idx := int16(c) - int16(v.foasc)
-			if idx > -1 && idx-int16(v.fomax) < 0 {
-				v.flagmain = 1
-				img.invertX = 0
-				v.fadddes = 1
-				v.put(uint16(idx + int16(v.fonum)))
-			}
+		if int16(v.fonum) < 0 {
+			return
 		}
-		img.depx += int16(v.folarg)
+		if idx := uint16(c) - v.foasc; int16(idx) >= 0 && idx < v.fomax {
+			v.mem[dsFlagmain] = 1
+			v.mem[dsInvx] = 0
+			v.mem[dsPutAgain] = 1
+			v.mem[dsMonoOn] = 1
+			v.mem[dsPutSub] = 0
+			v.putin(idx + v.fonum)
+			v.mem[dsMonoOn] = 0
+		}
 	}
+	v.w16(dsDepx, v.r16(dsDepx)+int16(v.folarg))
 }
 
 func (v *VM) putString() {
 	for p := v.sd7; v.mem[p] != 0; p++ {
-		v.putChar(int8(v.mem[p]))
+		v.putChar(v.mem[p])
 	}
 }
 

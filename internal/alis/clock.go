@@ -1,10 +1,5 @@
 package alis
 
-import (
-	"fmt"
-	"os"
-)
-
 // Virtual time, in PIT input clocks as in START.EXE: the game timer (IRQ 0,
 // PIT divisor 0x4da3, 60.035 Hz) runs itroutine; time only advances while
 // the VM waits. Every 20 ms 882 audio frames are mixed and the display is
@@ -148,60 +143,12 @@ func (v *VM) itroutine() {
 	img.fitroutine = 0
 }
 
-// compose converts the shown screen to ARGB.
+// compose converts video memory to ARGB.
 func (v *VM) compose(out []uint32) {
-	for i, c := range v.img.physic {
+	for i, c := range v.Screen() {
 		out[i] = v.img.mpalet[c]
 	}
-	if v.ShowCursor && v.cursor.shown >= 0 && v.cursor.sprite != 0 {
-		scr := v.cursorScratch[:]
-		copy(scr, v.img.physic)
-		v.cursorBlit(scr, v.cursor.x, v.cursor.y)
-		for i, c := range scr {
-			out[i] = v.img.mpalet[c]
-		}
-	}
 }
-
-func (v *VM) setphysic() {
-	v.img.fphysic = 1
-}
-
-func (v *VM) draw() {
-	img := &v.img
-	if v.OnDraw != nil {
-		v.OnDraw()
-	}
-	v.delayFrame()
-	if drawDebug {
-		fmt.Fprintf(os.Stderr, "D %d %d %d\n", v.clk.now/1000, v.timeclock, v.ctiming)
-	}
-	if v.fswitch != 0 && img.fphytolog != 0 {
-		img.fphytolog = 0
-		v.phytolog()
-	}
-	img.vtiming = 0
-	if v.fswitch != 0 {
-		v.oldfen()
-		img.ptabfen = 0
-	}
-	img.switchgo = 0
-	v.setWlogic(false)
-	oldphys := img.physic
-	for sc := v.scr.ptscreen; sc != 0; sc = v.scrToNext(sc) {
-		if v.sc8(sc, 0)&0x40 == 0 {
-			v.affiscr(sc, v.scrScreenID(sc))
-		}
-	}
-	img.fremap = 0
-	if v.fswitch != 0 {
-		img.physic = img.logic
-		img.logic = oldphys
-		v.setphysic()
-	}
-}
-
-var drawDebug = os.Getenv("DRAWDBG") != ""
 
 // Timeclock is the timer tick count (the original's 0x16058).
 func (v *VM) Timeclock() uint32 { return v.timeclock }
@@ -209,8 +156,8 @@ func (v *VM) Timeclock() uint32 { return v.timeclock }
 // Ctiming is the frame length in ticks (cstiming).
 func (v *VM) Ctiming() uint8 { return v.ctiming }
 
-// Screen is the displayed screen (8-bit pixels).
-func (v *VM) Screen() []byte { return v.img.physic }
+// Screen is video memory (8-bit pixels).
+func (v *VM) Screen() []byte { return v.mem[vgaBase : vgaBase+vgaSize] }
 
 // DAC is the palette as last uploaded to the VGA (6-bit r, g, b).
 func (v *VM) DAC() []byte {

@@ -1,3 +1,5 @@
+//go:build ignore
+
 package alis
 
 // Terrain bar drawing of the RRQ landscape (alis render/rrq3d_dos.c,

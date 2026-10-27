@@ -1,3 +1,5 @@
+//go:build ignore
+
 package alis
 
 // Projection, depth sort and redraw windows (alis image.c, "calculate what

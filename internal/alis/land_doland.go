@@ -1,3 +1,5 @@
+//go:build ignore
+
 package alis
 
 // The RRQ terrain column renderer (alis render/rrq3d_dos.c doland_dos,

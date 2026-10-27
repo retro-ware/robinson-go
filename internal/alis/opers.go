@@ -287,17 +287,17 @@ func (v *VM) ioDfree() int16 { return 32000 } // KB free for saves (capped as th
 
 func ofree(v *VM) {
 	switch d := v.varD7; {
-	case d == 0:
-		v.varD7 = int32((v.finmem - v.finprog) / 1000)
-	case d == 1:
-		v.varD7 = (v.img.debsprit - int32(v.finent)) / 1000
+	case d == 0: // 0x29fb
+		v.varD7 = int32(int16((v.finmem - v.finprog) / 1000))
+	case d == 1: // 0x2a15
+		v.varD7 = int32(int16((v.ru32(dsDebsprit) - v.finent) / 1000))
 	case d == 2:
 		v.varD7 = int32(v.maxprog) - int32(v.nbprog)
 	case d == 3:
 		v.varD7 = int32(v.maxent) - int32(v.nbent)
-	case d == 4:
+	case d == 4: // 0x2a4d: the free sprites
 		v.varD7 = 0
-		for s := v.img.libsprit; s != 0; s = v.sprTonext(s) {
+		for s := v.ru16(dsLibsprit); s != 0; s = v.fsu16(s, spToNext) {
 			v.varD7++
 		}
 	case 0x40 < d:

@@ -74,7 +74,6 @@ func (v *VM) init() {
 	v.initClock()
 	v.cdspeed = 0x493e0
 	v.pays = 0
-	v.render3dInit()
 
 	v.timeclock = 0
 	v.aud.fsound = 1
@@ -89,26 +88,20 @@ func (v *VM) init() {
 	for i := range v.img.dkpalet {
 		v.img.dkpalet[i] = 0x100
 	}
-	v.img.flinepal = 0
-	v.img.tlinepal[0] = 0
-	v.img.tlinepal[1] = 0
-	v.img.tlinepal[2] = 0xff
-	v.img.tlinepal[3] = 0
-	v.img.fmouse = -1
-	v.img.fonum = -1
-	v.img.loglarg = 0xa0
 
-	v.mem = make([]byte, ramSize)
-	v.img.spritemem = make([]byte, kSpriteMemSize)
-	v.img.physic = make([]byte, gameWidth*gameHeight)
-	v.img.logic = make([]byte, gameWidth*gameHeight)
-	v.img.logx1 = 0
-	v.img.logx2 = gameWidth - 1
-	v.img.logy1 = 0
-	v.img.logy2 = gameHeight - 1
+	// START.EXE's flat memory: its data at their addresses, then the block
+	// from the extender (0x1b97)
+	v.mem = make([]byte, memTop)
+	if !v.loadData() {
+		return
+	}
+	v.finmem = memTop // 0x15f26
+	v.wu32(0x15f2a, memTop)
+	v.wu32(0x15f22, progBase-gameWidth*gameHeight)
+	v.initScreens()
+	v.wu32(0x15f22, progBase)
 
 	v.fswitch = 1 // dbl_buf
-	v.flagmain = 0
 	v.fallent = 0
 	v.fseq = 0
 	v.fmuldes = 0
@@ -116,34 +109,24 @@ func (v *VM) init() {
 	v.ferase = 0
 	v.saversp = 0
 	v.basevar = 0
-	v.finmem = basemem - 0x400
 	v.nbprog = 0
 	v.maxprog = 0
-	v.atprog = basemem
 	v.nbent = 0
 	v.ptrent = 0
 	v.ctiming = 0
 	v.varD6, v.varD7 = 0, 0
 
-	v.bsd7 = 0x1a1e6
-	v.bsd6 = 0x1a2e6
-	v.bsd7bis = 0x1a3e6
-	v.vstandard = 0x19d16
-	v.tabptr = 0x19c00
+	// string registers (0x377f) and the standard vectors (corient 0x6056)
+	v.bsd7 = 0x15b8e
+	v.bsd6 = 0x15c8e
+	v.bsd7bis = 0x15d8e
+	v.vstandard = 0x19686
 	v.sd7 = v.bsd7
 	v.sd6 = v.bsd6
 	v.oldsd7 = v.bsd7bis
 	v.fp = nil
 	v.acc = kAccOrg
 	v.accOrg = kAccOrg
-
-	v.pretrlinetra = 0x1ef7c
-	v.pretglinetra = 0x1f58e
-	v.tlinetra = 0x1e602
-	v.itlinetra = 0x1e802
-	v.trlinetra = 0x1f07e
-	v.tglinetra = 0x1f690
-	v.fmouse = 0xff
 
 	v.loadMain()
 	if v.main == nil {
@@ -153,16 +136,34 @@ func (v *VM) init() {
 		return
 	}
 	v.script = v.main
-	v.basemain = v.main.vramOrg
+}
 
-	v.img.zoombid = 0x20de2
-	v.img.landdata = 0x1ccc2
+// startExe holds START.EXE's 32-bit image from this file offset; its data
+// lie at dataStart..dataEnd, the zeroed rest up to 0x1cd50.
+const (
+	startExe     = "start.exe"
+	startExeBase = 0x4857
+	dataStart    = 0x14d80
+	dataEnd      = 0x1cba8
+)
+
+func (v *VM) loadData() bool {
+	raw, err := v.fs.ReadFile(startExe)
+	if err == nil && len(raw) < startExeBase+dataEnd {
+		err = fmt.Errorf("too short")
+	}
+	if err != nil {
+		v.fatal("START.EXE: " + err.Error())
+		return false
+	}
+	copy(v.mem[dataStart:dataEnd], raw[startExeBase+dataStart:])
+	return true
 }
 
 const mainScript = "main.io"
 
 // loadMain reads the VM specs from the main script header, lays out the
-// arena and starts the main script (alis_load_main).
+// memory and starts the main script (START.EXE 0xad33).
 func (v *VM) loadMain() {
 	v.nbprog = 0
 	v.main = nil
@@ -172,50 +173,57 @@ func (v *VM) loadMain() {
 		return
 	}
 	v.vprotect = 0
+	copy(v.mem[0x1802c:0x18042], raw)
 	h := raw[6:]
 	v.specs.scriptDataTabLen = le16(h[0:])
 	v.specs.scriptVramTabLen = le16(h[2:])
 	v.specs.memCap = le32(h[4:])
-	v.specs.maxAllocatableVram = le32(h[8:])
-	v.specs.vramToDataOffset = (le32(h[12:]) + 3) * 0x30
+	v.specs.maxAllocatableVram = uint32(le16(h[8:]))
+	v.specs.vramToDataOffset = uint32(le16(h[12:]))
 
-	v.atprog = basemem
-	v.atent = v.atprog + uint32(v.specs.scriptDataTabLen)*4
+	v.atprog = v.ru32(0x15f22)
+	v.wu32(0x15f5e, v.atprog)
+	v.wu32(0x15f6e, v.atprog)
+	v.atent = v.atprog + (uint32(v.specs.scriptDataTabLen)>>2+1)<<4
+	v.wu32(0x15f72, v.atent)
 	v.maxent = uint32(v.specs.scriptVramTabLen)
 	v.debent = v.atent + v.maxent*6
 	v.finent = v.debent
-
-	v.img.debsprit = int32(((v.debent + v.specs.maxAllocatableVram) | 0xf) + 1)
-	v.img.finsprit += v.img.debsprit + int32(v.specs.vramToDataOffset)
-
-	v.debprog = uint32(v.img.finsprit)
-	v.finprog = v.debprog
+	v.wu32(0x15f76, v.debent)
+	v.wu32(0x15f7a, v.finent)
+	debsprit := v.debent + (v.specs.maxAllocatableVram | 0xf) + 1
+	v.wu32(dsDebsprit, debsprit)
+	finsprit := debsprit + ((v.specs.vramToDataOffset+3)*0x30 | 0xf) + 1
+	v.wu32(dsFinsprit, finsprit)
+	v.debprog = finsprit
+	v.finprog = finsprit
 	v.dernprog = v.atprog
 	v.maxprog = v.specs.scriptDataTabLen
-
-	v.finmem = ramSize - 0x9168
-	if v.specs.memCap != 0 && v.debprog+v.specs.memCap < v.finmem {
-		v.finmem = v.debprog + v.specs.memCap
+	if top := finsprit + v.specs.memCap; top <= v.finmem {
+		v.finmem = top
 	}
+	v.mem[0x16077] = 0xff
+	v.wu16(0x15f38, 0xffff)
+
+	// entity table (0xb7a8): vram and the next entry
+	for i := uint32(1); i < v.maxent; i++ {
+		v.wu16(v.atent+i*6-2, uint16(i*6))
+		v.wu32(v.atent+i*6-6, 0)
+	}
+	v.wu16(v.atent+4, 0)
+	v.nbent = 1
+	v.dernent = 6
 
 	v.inisprit()
-
-	// entity table: vram (s32) + next link (u16) per entry
-	for idx := uint32(0); idx < uint32(v.specs.scriptVramTabLen); idx++ {
-		v.w32(v.atent+idx*6, 0)
-		v.wu16(v.atent+idx*6+4, uint16((1+idx)*6))
-	}
-	v.specs.scriptVramMaxAddr = ((v.debent + v.specs.maxAllocatableVram) | 0xf) + 1
 
 	prog := v.scriptLoad(mainScript)
 	if prog == nil {
 		return
 	}
-	v.main = v.scriptLive(prog)
+	v.main = v.scriptCreate(prog, 0)
+	v.wu16(v.main.vramOrg-0x16, 0)
 	v.basemain = v.main.vramOrg
-
-	v.dernent = v.r16(v.atent + 4)
-	v.wu16(v.atent+4, 0)
+	v.wu32(dsBasemain, v.basemain)
 }
 
 // ---------------------------------------------------------------------------
@@ -373,6 +381,7 @@ func (v *VM) readexecCodesc3() {
 
 func (v *VM) readexecOpername() {
 	code := v.read8()
+	v.operCode, v.operPC = code, v.script.pc
 	if f := opernames[code]; f != nil {
 		f(v)
 	} else {
@@ -430,64 +439,6 @@ func (v *VM) loop() {
 	v.script.running = true
 	for v.state != stateStopped && v.script.running {
 		v.readexecOpcode()
-	}
-}
-
-func (v *VM) savecoord(addr uint32) {
-	v.img.oldcx = v.r16(addr + scrWCX)
-	v.img.oldcy = v.r16(addr + scrWCY)
-	v.img.oldcz = v.r16(addr + scrWCZ)
-	v.img.oldacx = v.r16(addr + scrWCAX)
-	v.img.oldacy = v.r16(addr + scrWCAY)
-	v.img.oldacz = v.r16(addr + scrWCAZ)
-}
-
-func normAngle(angle int16) int16 {
-	if 0x168 < angle {
-		angle -= 0x168
-		if 0x168 < angle {
-			angle %= 0x168
-		}
-	}
-	if angle < -0x168 {
-		angle += 0x168
-		if angle < -0x168 {
-			angle %= 0x168
-		}
-	}
-	return angle
-}
-
-func (v *VM) updtcoord(addr uint32) {
-	angle := v.r16(addr + scrWCAX)
-	if angle != v.img.oldacx {
-		v.w16(addr+scrWCAX, normAngle(angle))
-	}
-	angle = v.r16(addr + scrWCAY)
-	if angle != v.img.oldacy {
-		v.w16(addr+scrWCAY, normAngle(angle))
-	}
-	angle = v.r16(addr + scrWCAZ)
-	if angle != v.img.oldacz {
-		angle = normAngle(angle)
-		v.w16(addr+scrWCAZ, angle)
-	}
-
-	addx := v.r16(addr+scrWCX) - v.img.oldcx
-	addy := v.r16(addr+scrWCY) - v.img.oldcy
-	addz := v.r16(addr+scrWCZ) - v.img.oldcz
-	wcaz := v.ru16(addr + scrWCAZ)
-	if angle != v.img.oldacz || addz != 0 || addx != 0 || addy != 0 {
-		for s := v.ru16(v.script.vramOrg - 0x18); s != 0; s = v.sprTonext(s) {
-			sp := v.spr(s)
-			if sp.state() == 0 {
-				sp.setState(2)
-			}
-			sp.setDepx(sp.depx() + addx)
-			sp.setDepy(sp.depy() + addy)
-			sp.setDepz(sp.depz() + addz)
-			sp.setSprite0x28(sp.sprite0x28()&0xffff | uint32(wcaz)<<16)
-		}
 	}
 }
 
@@ -593,7 +544,7 @@ func (v *VM) scriptOrg(vram uint32) uint32 { return uint32(v.r32(vram - 0x14)) }
 
 func (v *VM) adresdes(idx int32) int32 {
 	vram := v.script.vramOrg
-	if v.flagmain != 0 {
+	if v.mem[dsFlagmain] != 0 {
 		vram = v.main.vramOrg
 	}
 	addr := v.scriptOrg(vram)
@@ -616,7 +567,7 @@ func (v *VM) adresform(idx int16) int32 {
 
 func (v *VM) adresmus(idx int32) int32 {
 	vram := v.script.vramOrg
-	if v.flagmain != 0 {
+	if v.mem[dsFlagmain] != 0 {
 		vram = v.main.vramOrg
 	}
 	mem := v.scriptOrg(vram)

@@ -1,114 +1,125 @@
 package alis
 
-// Tile maps (alis opcodes.c, Robinson's Requiem paths). A map header lives
-// in the 0x400 bytes below the map data.
+import "math/bits"
 
+// Tile maps (START.EXE 0x493b..0x4c46). A map is an array variable; its
+// header lies in the 0x400 bytes below the data.
+
+// mapvar is the variable an opcode names: a word offset into the running
+// entity's variables, or after a zero word into the main script's.
+func (v *VM) mapvar() uint32 {
+	base := v.script.vramOrg
+	off := v.read16()
+	if off == 0 {
+		base = v.basemain
+		off = v.read16()
+	}
+	return base + uint32(int32(off))
+}
+
+// log2w is the bit counting loops of cdefmap: the highest set bit, 0 for 0.
+func log2w(x uint16) uint16 {
+	if x == 0 {
+		return 0
+	}
+	return uint16(bits.Len16(x) - 1)
+}
+
+// cdefmap (0x493b) sets up the map header; the word at -0x3b6 is cleared
+// relative to the running entity, not to the map.
 func cdefmap(v *VM) {
-	m := v.readVaddr()
-	v.readexecOpername()
-	v.mem[m-0x400] = uint8(v.varD7)
-	v.readexecOpername()
-	v.w16(m-0x3fe, int16(v.varD7))
-	v.wu16(m-0x3fc, v.ru16(v.script.vramOrg-0x0e))
-	v.readexecOpername()
-	v.w16(m-0x3fa, int16(v.varD7))
-	v.w16(m-0x3f8, int16(v.varD7))
-	v.readexecOpername()
-	v.w16(m-0x3f8, int16(v.varD7-1)+v.r16(m-0x3f8))
-	for _, o := range []uint32{0x3f4, 0x3f2, 0x3f0} {
-		v.readexecOpername()
-		if v.varD7 == 0 {
-			v.varD7 = 1
-		}
-		v.w16(m-o, int16(v.varD7))
-	}
+	m := v.mapvar()
+	v.mem[m-0x400] = uint8(v.getval())
+	d := uint16(v.getval())
+	v.mem[m-0x3fe] = uint8(d >> 8)
+	v.mem[m-0x3fd] = uint8(d)
+	v.wu16(m-0x3fc, v.ru16(v.script.vramOrg-0xe))
+	x := v.getval()
+	v.w16(m-0x3fa, x)
+	v.w16(m-0x3f8, x)
+	v.w16(m-0x3f8, v.r16(m-0x3f8)+v.getval()-1)
+	v.w16(m-0x3f4, v.getval())
+	v.w16(m-0x3f2, v.getval())
+	v.w16(m-0x3f0, v.getval())
 	v.mem[m-0x3ff] = 0
-	v.w32(m-0x3dc, 4)
+	v.wu16(m-0x3dc, 4)
+	v.wu16(m-0x3da, 0)
 	v.mem[m-0x3d8] = 0x7f
-	var vala, valb uint32
+	var n, w uint32
 	if int8(v.mem[m-1]) < 0 {
-		valb = v.ru32(m - 6)
-		vala = v.ru32(m - 10)
+		w, n = v.ru32(m-6), v.ru32(m-0xa)
 	} else {
-		valb = uint32(v.ru16(m - 4))
-		vala = uint32(v.ru16(m - 6))
+		w, n = uint32(v.ru16(m-4)), uint32(v.ru16(m-6))
 	}
-	ratio := uint16(vala / uint32(uint16(valb)))
-	v.wu16(m-0x3c6, ratio)
-	v.wu16(m-0x3cc, ratio)
-	v.wu16(m-0x3c4, uint16(valb))
-	v.wu16(m-0x3ca, uint16(valb)>>1)
-	v.w16(m-0x3b6, 0)
-	for i := uint32(0); i < 3; i++ {
-		result := int32(-1)
-		count := v.ru16(m - (0x3f4 - i*2))
-		for {
-			result++
-			count >>= 1
-			if count == 0 {
-				break
-			}
-		}
-		v.w16(m-(0x3c0-i*2), int16(result))
+	if w == 0 || int32(n) < 0 { // cdq: a negative size overflows div
+		v.fatal("cdefmap: division fault")
+		return
 	}
-	if v.mem[m-0x3d8] == '\n' {
-		if id := v.curScreenID(); id != 0 {
-			v.wu16(v.sca(id)+0x40, v.ru16(v.script.vramOrg-0x0e))
-			v.wu16(v.sca(id)+0x42, uint16(m-v.script.vramOrg))
-		}
-	}
+	v.wu16(m-0x3c6, uint16(n/w))
+	v.wu16(m-0x3cc, uint16(n/w))
+	v.wu16(m-0x3c4, uint16(w))
+	v.wu16(m-0x3ca, uint16(w)>>1)
+	v.wu16(v.script.vramOrg-0x3b6, 0)
+	v.wu16(m-0x3c0, log2w(v.ru16(m-0x3f4)))
+	v.wu16(m-0x3be, log2w(v.ru16(m-0x3f2)))
+	v.wu16(m-0x3bc, log2w(v.ru16(m-0x3f0)))
+	// 0x4a87 tests -0x3d8 for 0xa, but it was just set to 0x7f
 }
 
+// csetmap (0x4ab1) sets the map's position and visible size.
 func csetmap(v *VM) {
-	m := v.readVaddr()
-	v.readexecOpername()
-	v.w16(m-0x3ee, int16(v.varD7))
-	v.readexecOpername()
-	v.w16(m-0x3ec, int16(v.varD7))
-	v.readexecOpername()
-	v.w16(m-0x3ea, int16(v.varD7))
-	v.readexecOpername()
-	v.w16(m-0x3e8, int16(v.varD7))
-	v.wu16(m-0x3d6, uint16(v.varD7)-1)
-	v.wu16(m-0x3ee, uint16(v.varD7-1)>>1+v.ru16(m-0x3ee))
-	v.readexecOpername()
-	v.w16(m-0x3e6, int16(v.varD7))
-	v.readexecOpername()
-	v.w16(m-0x3e4, int16(v.varD7))
-	v.wu16(m-0x3d4, uint16(v.varD7)-1)
-	v.wu16(m-0x3ea, uint16(v.varD7-1)>>1+v.ru16(m-0x3ea))
+	m := v.mapvar()
+	v.w16(m-0x3ee, v.getval())
+	v.w16(m-0x3ec, v.getval())
+	v.w16(m-0x3ea, v.getval())
+	d := v.getval()
+	v.w16(m-0x3e8, d)
+	d--
+	v.w16(m-0x3d6, d)
+	v.w16(m-0x3ee, v.r16(m-0x3ee)+int16(uint16(d)>>1))
+	v.w16(m-0x3e6, v.getval())
+	d = v.getval()
+	v.w16(m-0x3e4, d)
+	d--
+	v.w16(m-0x3d4, d)
+	v.w16(m-0x3ea, v.r16(m-0x3ea)+int16(uint16(d)>>1))
 }
 
+// cputmap (0x4b4d) puts the map as an element of the running entity: its
+// image is the header at -0x3dc.
 func cputmap(v *VM) {
-	m := v.readVaddr()
-	v.readexecOpername()
-	v.w16(m-0x3e2, int16(v.varD7))
-	v.readexecOpername()
-	v.w16(m-0x3e0, int16(v.varD7))
-	v.readexecOpername()
-	v.w16(m-0x3de, int16(v.varD7))
-	v.readexecOpername()
-	v.img.numelem = int8(v.varD7)
-	pos := uint32(v.ru16(m - 0x3de))
-	width := v.ru16(m - 0x3f0)
-	v.wu16(m-0x3d2, uint16(pos%uint32(width)))
-	v.fmuldes = 0
-	var newidx, oldidx uint16
-	if !v.searchelem(&newidx, &oldidx) {
-		v.createlem(&newidx, &oldidx)
+	m := v.mapvar()
+	v.w16(m-0x3e2, v.getval())
+	v.w16(m-0x3e0, v.getval())
+	v.w16(m-0x3de, v.getval())
+	v.w16(dsNumelem, v.getval())
+	w := v.ru16(m - 0x3f0)
+	if w == 0 {
+		v.fatal("cputmap: division by zero")
+		return
 	}
-	if sp := v.spr(newidx); sp.state() > -1 {
-		sp.setState(2)
+	v.wu16(m-0x3d2, v.ru16(m-0x3de)%w)
+	v.mem[dsPutSub] = 0
+	di, bx, found := v.searchelem()
+	if !found {
+		var ok bool
+		if di, ok = v.createlem(di, bx); !ok {
+			return
+		}
 	}
-	v.putmapin(newidx, int32(m-0x3dc))
-	if v.searchelem(&newidx, &oldidx) {
-		sp := v.spr(newidx)
-		sp.setCredonOff(-1)
-		sp.setFlaginvx(0)
-		sp.setChsprite(0)
-		sp.setDepx(v.r16(m - 0x3ee))
-		sp.setDepy(v.r16(m - 0x3ec))
-		sp.setDepz(v.r16(m - 0x3ea))
+	if int8(v.fs8(di, spState)) >= 0 {
+		v.setFs8(di, spState, 2)
+	}
+	v.putfill(di, m-0x3dc)
+	v.putend()
+	v.mem[dsPutAgain] = 0
+	if di, _, found = v.searchelem(); found {
+		v.setFs8(di, spCredon, 0xff)
+		v.setFs8(di, spInvx, 0)
+		v.setFs8(di, spZoom, 0)
+		v.setFs16(di, spDepx, v.r16(m-0x3ee))
+		v.setFs16(di, spDepy, v.r16(m-0x3ec))
+		v.setFs16(di, spDepz, v.r16(m-0x3ea))
 	}
 }
 
@@ -116,6 +127,3 @@ func csavepal(v *VM) {
 	v.readexecOpername()
 	v.dosCsavepal(int16(v.varD7))
 }
-
-// csczoom sets the three words at 0x3a (START.EXE 0x433b).
-func csczoom(v *VM) { v.scrWords(0x3a, 3, false) }

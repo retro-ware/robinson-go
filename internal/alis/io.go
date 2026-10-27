@@ -20,11 +20,11 @@ func (v *VM) initInput() {
 		layout, mouse = stp[13], stp[11] != '0'
 	}
 	v.initKeyboard(layout)
-	v.cursor.shown = -1
 	if mouse {
 		v.initMouse()
 		v.theconfig |= 4
 	}
+	v.initCursor()
 }
 
 // initKeyboard sets the layout table from START.STP's keyboard letter and

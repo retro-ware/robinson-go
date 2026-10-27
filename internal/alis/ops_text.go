@@ -53,39 +53,6 @@ func ctstform(v *VM) {
 	crstent(v)
 }
 
-// putAt implements the cxput/cmput family.
-func (v *VM) putAt(main bool, invert uint8, at bool) {
-	v.flagmain = 0
-	if main {
-		v.flagmain = 1
-	}
-	v.img.invertX = invert
-	if !at {
-		v.readexecOpername()
-		v.img.depx, v.img.depy, v.img.depz = 0, 0, 0
-		v.img.numelem = 0
-		v.put(uint16(v.varD7))
-		return
-	}
-	v.readexecOpernameSaveD7()
-	v.img.depx = int16(v.varD7)
-	v.readexecOpernameSaveD7()
-	v.img.depy = int16(v.varD7)
-	v.readexecOpernameSaveD7()
-	v.img.depz = int16(v.varD7)
-	v.readexecOpernameSaveD7()
-	v.readexecOpernameSaveD6()
-	v.img.numelem = int8(v.varD6)
-	v.put(uint16(v.varD7))
-}
-
-func cxput(v *VM)    { v.putAt(false, v.xinv(v.script.vramOrg)^1, false) }
-func cxputat(v *VM)  { v.putAt(false, v.xinv(v.script.vramOrg)^1, true) }
-func cmput(v *VM)    { v.putAt(true, v.xinv(v.script.vramOrg), false) }
-func cmputat(v *VM)  { v.putAt(true, v.xinv(v.script.vramOrg), true) }
-func cmxput(v *VM)   { v.putAt(true, v.xinv(v.script.vramOrg)^1, false) }
-func cmxputat(v *VM) { v.putAt(true, v.xinv(v.script.vramOrg)^1, true) }
-
 func cmforme(v *VM) {
 	v.readexecOpername()
 	v.w16(v.script.vramOrg-0x1a, int16(v.varD7))
@@ -138,7 +105,7 @@ func (v *VM) readLine(digits bool) {
 		if !digits || c == 0x2d || (int8(c-0x30) > -1 && c < 0x3a) {
 			v.mem[p] = c
 			p++
-			v.putChar(int8(c))
+			v.putChar(uint8(c))
 		}
 	}
 	v.mem[p] = 0
@@ -222,7 +189,7 @@ func crunfilm(v *VM) {
 func (v *VM) putval(d int16) {
 	v.valtostr(v.sd7, d)
 	for p := v.sd7; v.mem[p] != 0; p++ {
-		v.putChar(int8(v.mem[p]))
+		v.putChar(v.mem[p])
 	}
 }
 

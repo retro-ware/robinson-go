@@ -2,21 +2,6 @@ package alis
 
 // Screen maps, classes, instruments, sprite modes and erasure (alis opcodes.c).
 
-func cscmap(v *VM) {
-	v.readexecOpername()
-	ent := v.ru16(v.script.vramOrg - 0x0e)
-	val := v.read16()
-	if val == 0 {
-		ent = 0
-		val = v.read16()
-	}
-	if id := v.curScreenID(); id != 0 {
-		a := v.sca(id)
-		v.w16(a+0x42, val)
-		v.wu16(a+0x40, ent)
-	}
-}
-
 func cfindcla(v *VM) {
 	v.readexecOpername()
 	idx := 0
@@ -66,12 +51,12 @@ func (v *VM) instru() {
 }
 
 func cinstru(v *VM) {
-	v.flagmain = 0
+	v.mem[dsFlagmain] = 0
 	v.instru()
 }
 
 func cminstru(v *VM) {
-	v.flagmain = 1
+	v.mem[dsFlagmain] = 1
 	v.instru()
 }
 
@@ -98,30 +83,29 @@ func calign(v *VM) {
 	v.mem[v.script.vramOrg-0x2d] = uint8(v.varD7)
 }
 
-// TODO(START.EXE): alis takes the mode byte from basemain+1, not from the screen.
+// dsStars is the star table: 8 words (cbackstar, cstarring).
+const dsStars = 0x19676
+
+// cbackstar (START.EXE 0x8f05) sets the first six words, clears the
+// seventh and marks the running entity's scene (bits 3-4 of byte 1).
 func cbackstar(v *VM) {
-	for i := range 6 {
-		v.readexecOpername()
-		v.starbuff[i] = int16(v.varD7)
+	for i := range uint32(6) {
+		v.w16(dsStars+2*i, v.getval())
 	}
-	v.starbuff[6] = 0
-	id := v.curScreenID()
-	if int16(id) < 0 {
-		return
+	v.wu16(dsStars+12, 0)
+	if id := v.curScreenID(); int16(id) >= 0 {
+		a := v.sca(id) + 1
+		v.mem[a] &= 0xe7
+		if v.r16(dsStars) != 0 {
+			v.mem[a] |= 0x18
+		}
 	}
-	value := v.mem[v.basemain+1] & 0xe7
-	if v.varD7 != 0 {
-		value |= 0x18
-		at := v.ru16(v.sca(id) + 2)
-		v.spr(at).setNumelem(int8(value))
-	}
-	v.mem[v.sca(id)+1] = value
 }
 
+// cstarring (START.EXE 0x8f7d) sets all eight.
 func cstarring(v *VM) {
-	for i := range 8 {
-		v.readexecOpername()
-		v.starbuff[i] = int16(v.varD7)
+	for i := range uint32(8) {
+		v.w16(dsStars+2*i, v.getval())
 	}
 }
 
@@ -158,27 +142,6 @@ func cautofile(v *VM) {
 	v.readexecOpernameSwap()
 	copy(v.autoname[:12], v.mem[v.sd7:v.sd7+12])
 	v.autoname[12] = 0
-}
-
-// ccancel is cerase with the cancel flag (START.EXE 0x5cb7).
-func ccancel(v *VM) {
-	v.ferase = 1
-	cerase(v)
-}
-
-func ccancall(v *VM) {
-	v.ferase = 1
-	var tmp uint16
-	cur := v.elemHead()
-	for cur != 0 {
-		v.killelem(&cur, &tmp)
-	}
-	v.ferase = 0
-}
-
-func ccancen(v *VM) {
-	v.ferase = 1
-	cerasen(v)
 }
 
 func cblast(v *VM) {

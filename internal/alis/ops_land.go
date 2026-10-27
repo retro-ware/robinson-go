@@ -3,35 +3,6 @@ package alis
 // Darkness, angles, follow/view, films and terrain walking (alis opcodes.c,
 // Robinson's Requiem DOS paths).
 
-// scrWords evaluates n operands into the words at off.. of the current
-// screen, adding when add is set, and marks the screen changed.
-// The screen is looked up after the operands.
-func (v *VM) scrWords(off uint32, n int, add bool) {
-	var w [4]int16
-	for i := range n {
-		v.readexecOpername()
-		w[i] = int16(v.varD7)
-	}
-	scr := v.basemain + uint32(v.curScreenID())
-	for i := range uint32(n) {
-		if add {
-			v.add16(scr+off+i*2, w[i])
-		} else {
-			v.w16(scr+off+i*2, w[i])
-		}
-	}
-	v.mem[scr] |= 0x80
-}
-
-// cscsun sets the four sun words at 0x7c (START.EXE 0x450b).
-func cscsun(v *VM) { v.scrWords(0x7c, 4, false) }
-
-// cscaset sets the camera position at 0x34 (START.EXE 0x430e).
-func cscaset(v *VM) { v.scrWords(0x34, 3, false) }
-
-// cscamov moves the camera position at 0x34 (START.EXE 0x42db).
-func cscamov(v *VM) { v.scrWords(0x34, 3, true) }
-
 // cdarkpal sets the darkness colour of n palette entries from first
 // (START.EXE 0x87e8: unsigned first/n, no range check; the port stops at
 // the table's end) and flags darkness unless every word after entry 0 is
@@ -58,26 +29,6 @@ func cdarkpal(v *VM) {
 	}
 }
 
-func cscdark(v *VM) {
-	v.flagmain = 0
-	scr := v.basemain + uint32(v.curScreenID())
-	v.readexecOpername()
-	v.w16(scr+0x98, int16(v.varD7))
-	v.readexecOpername()
-	dark := v.adresdes(v.varD7)
-	v.w32(scr+0x9a, v.r32(uint32(dark))+dark)
-	v.readexecOpername()
-	v.w16(scr+0x9e, int16(v.varD7))
-	v.mem[scr] |= 0x80
-	h := v.r16(uint32(v.r32(scr+0x9a))+4) + 1
-	v.w16(scr+0xa0, h)
-	if v.r16(scr+0x9e) < 0 {
-		v.w16(scr+0x9e, h>>1)
-	}
-	v.basedark = uint16(v.r16(scr + 0x9e))
-	v.ptrdark = uint32(v.r32(scr+0x9a)) + 8
-}
-
 func caset(v *VM) {
 	vram := v.script.vramOrg
 	for _, o := range []uint32{scrWCAX, scrWCAY, scrWCAZ} {
@@ -92,27 +43,6 @@ func camov(v *VM) {
 		v.readexecOpername()
 		v.add16(vram+o, int16(v.varD7))
 	}
-}
-
-func cscfollow(v *VM) {
-	scr := v.basemain + uint32(v.curScreenID())
-	v.readexecOpername()
-	v.w16(scr+0x60, int16(v.varD7))
-	v.readexecOpername()
-	v.mem[scr+0x84] = uint8(v.varD7)
-	for o := uint32(0x86); o <= 0x90; o += 2 {
-		v.readexecOpername()
-		v.w16(scr+o, int16(v.varD7))
-	}
-}
-
-func cscview(v *VM) {
-	scr := v.basemain + uint32(v.curScreenID())
-	for o := uint32(0x64); o <= 0x6e; o += 2 {
-		v.readexecOpername()
-		v.w16(scr+o, int16(v.varD7))
-	}
-	v.mem[scr] |= 0x80
 }
 
 func cfilm(v *VM) {
@@ -531,12 +461,5 @@ func caim(v *VM) {
 }
 
 func cpointpix(v *VM) {
-	v.readexecOpername()
-	v.readexecOpernameSaveD6()
-	v.pointpix(int16(v.varD7), int16(v.varD6))
-	img := &v.img
-	for _, r := range [...]int16{img.cxtstpix, img.cytstpix, img.cztstpix, img.dtstpix, img.ntstpix, img.etstpix} {
-		v.varD7 = int32(r)
-		v.cstoreContinue()
-	}
+	v.fatal("cpointpix: START.EXE 0x9a5b (land) is not ported")
 }
