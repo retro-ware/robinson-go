@@ -36,7 +36,7 @@ func (v *VM) wtstmov() {
 	v.wcy = y + v.r16(vram+scrWCY)
 	v.wcz = z + v.r16(vram+scrWCZ)
 	v.readexecOpername()
-	v.matmask = int16(v.varD7)
+	v.setMatmask(int16(v.varD7))
 }
 
 func ctstform(v *VM) {
@@ -46,7 +46,7 @@ func ctstform(v *VM) {
 	v.wcy = v.r16(vram + scrWCY)
 	v.wcz = v.r16(vram + scrWCZ)
 	v.readexecOpername()
-	v.matmask = int16(v.varD7)
+	v.setMatmask(int16(v.varD7))
 	v.readexecOpername()
 	v.wforme = int16(v.varD7)
 	v.clipform()

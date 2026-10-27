@@ -34,7 +34,7 @@ func (v *VM) traitfirm(entVram, formedata, entBaseform, forme int32) bool {
 // monofirm tests the other entity's box against px1..pz2; false is a hit.
 func (v *VM) monofirm(entVram, entFormedata int32) bool {
 	fd := uint32(entFormedata)
-	if uint16(v.r16(fd))&uint16(v.matmask) == 0 {
+	if uint16(v.r16(fd))&uint16(v.matmask()) == 0 {
 		return true
 	}
 	var x1, y1, z1, x2, y2, z2 int16
@@ -243,7 +243,7 @@ func ctstmov(v *VM) {
 	v.readexecOpername()
 	v.wcz = v.r16(vram+scrWCZ) + int16(v.varD7)
 	v.readexecOpername()
-	v.matmask = int16(v.varD7)
+	v.setMatmask(int16(v.varD7))
 	v.wforme = v.cforme(vram)
 	v.clipform()
 	crstent(v)
@@ -258,7 +258,7 @@ func ctstset(v *VM) {
 	v.readexecOpername()
 	v.wcz = int16(v.varD7)
 	v.readexecOpername()
-	v.matmask = int16(v.varD7)
+	v.setMatmask(int16(v.varD7))
 	v.wforme = v.cforme(v.script.vramOrg)
 	v.clipform()
 	crstent(v)
@@ -274,7 +274,7 @@ func cftstmov(v *VM) {
 	v.readexecOpername()
 	v.wcz = v.r16(vram+scrWCZ) + int16(v.varD7)
 	v.readexecOpername()
-	v.matmask = int16(v.varD7)
+	v.setMatmask(int16(v.varD7))
 	v.readexecOpername()
 	v.wforme = int16(v.varD7)
 	v.clipform()
@@ -290,7 +290,7 @@ func cftstset(v *VM) {
 	v.readexecOpername()
 	v.wcz = int16(v.varD7)
 	v.readexecOpername()
-	v.matmask = int16(v.varD7)
+	v.setMatmask(int16(v.varD7))
 	v.readexecOpername()
 	v.wforme = int16(v.varD7)
 	v.clipform()
@@ -441,12 +441,12 @@ func (v *VM) submat(base uint32, sub int16) bool {
 // monomat is 0x7b74.
 func (v *VM) monomat(at uint32) bool {
 	v.goodmat = v.ru16(at)
-	return v.goodmat&uint16(v.matmask) != 0
+	return v.goodmat&uint16(v.matmask()) != 0
 }
 
 // setMatmaskByte: the searches store only the low byte of the mask.
 func (v *VM) setMatmaskByte() {
-	v.matmask = int16(uint16(v.matmask)&0xff00 | uint16(uint8(v.varD7)))
+	v.setMatmask(int16(uint16(v.matmask())&0xff00 | uint16(uint8(v.varD7))))
 }
 
 // readNorme squares the 16-bit operand unsigned (mul dx).

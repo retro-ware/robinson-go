@@ -440,7 +440,9 @@ func ochr(v *VM) {
 
 func ochange(v *VM)  { v.varD7 = 0 }
 func ocountry(v *VM) { v.varD7 = int32(v.pays) }
-func omip(v *VM)     { v.varD7 = 0x64 }
+
+// omip (0xa5cc) is the speed calibration count (0x16064).
+func omip(v *VM) { v.varD7 = int32(int16(v.ru16(dsMip))) }
 
 // ojoykey is 0 (START.EXE 0xa3dd).
 func ojoykey(v *VM) { v.varD7 = 0 }

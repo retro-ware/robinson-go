@@ -39,6 +39,7 @@ func main() {
 	rawDraw := flag.Int("rawdraw", 0, "draw for -raw")
 	vars := flag.String("vars", "", "write the scripts' state at draw -varsdraw to this file (as rrqharness -vars)")
 	varsDraw := flag.Int("varsdraw", 0, "draw for -vars")
+	dsDump := flag.String("dsdump", "", "write the data segment at draw -varsdraw to this file")
 	flag.Parse()
 
 	if *save == "" {
@@ -108,6 +109,9 @@ func main() {
 		}
 		if *raw != "" && draws == *rawDraw {
 			check(os.WriteFile(*raw, append(append([]byte{}, scr...), m.DAC()...), 0o644))
+		}
+		if *dsDump != "" && draws == *varsDraw {
+			check(os.WriteFile(*dsDump, m.Prog(), 0o644))
 		}
 		if *vars != "" && draws == *varsDraw {
 			f, err := os.Create(*vars)

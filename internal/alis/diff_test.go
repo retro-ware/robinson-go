@@ -412,12 +412,13 @@ func (v *VM) setRegs(r cref.Regs) {
 }
 
 func (v *VM) ent() cref.Ent {
-	return cref.Ent{Wcx: v.wcx, Wcy: v.wcy, Wcz: v.wcz, Wforme: v.wforme, Matmask: v.matmask, Ptrent: int32(v.ptrent),
+	return cref.Ent{Wcx: v.wcx, Wcy: v.wcy, Wcz: v.wcz, Wforme: v.wforme, Matmask: v.matmask(), Ptrent: int32(v.ptrent),
 		Tablent: v.tablent, Matent: v.matent, Witmov: v.witmov, Fmitmov: v.fmitmov, Fallent: v.fallent, Tstinv: v.tstinv, Goodmat: v.goodmat}
 }
 
 func (v *VM) setEnt(e cref.Ent) {
-	v.wcx, v.wcy, v.wcz, v.wforme, v.matmask, v.ptrent = e.Wcx, e.Wcy, e.Wcz, e.Wforme, e.Matmask, int(e.Ptrent)
+	v.wcx, v.wcy, v.wcz, v.wforme, v.ptrent = e.Wcx, e.Wcy, e.Wcz, e.Wforme, int(e.Ptrent)
+	v.setMatmask(e.Matmask)
 	v.tablent, v.matent, v.witmov, v.fmitmov, v.fallent, v.goodmat, v.tstinv = e.Tablent, e.Matent, e.Witmov, e.Fmitmov, e.Fallent, e.Goodmat, e.Tstinv
 }
 

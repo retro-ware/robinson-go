@@ -90,3 +90,8 @@ func (v *VM) finmem() uint32      { return v.ru32(dsFinmem) }
 func (v *VM) setFinmem(x uint32)  { v.wu32(dsFinmem, x) }
 func (v *VM) finprog() uint32     { return v.ru32(dsFinprog) }
 func (v *VM) setFinprog(x uint32) { v.wu32(dsFinprog, x) }
+
+const dsMatmask = 0x16032 // material mask of the tests and the land queries
+
+func (v *VM) matmask() int16     { return v.r16(dsMatmask) }
+func (v *VM) setMatmask(x int16) { v.w16(dsMatmask, x) }

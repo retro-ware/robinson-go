@@ -93,12 +93,15 @@ func (v *VM) advanceTo(target uint64) {
 // script runs: the speed calibration waits for a first tick, clears the
 // frame counter and counts for two more (0x1e81-0x1eb9), and the CD speed
 // test reads for one more (0x32c7; the emulated reads take no time).
+// The calibration loop count saturates at 0x7fff on any machine faster
+// than a slow 386, so the count stored at 0x1ecd is 0x7fff/0x28.
 func (v *VM) startupTicks() {
 	v.waitTick()
 	v.img.vtiming = 0
 	for range 3 {
 		v.waitTick()
 	}
+	v.wu16(dsMip, 0x7fff/0x28)
 }
 
 // waitEvent waits for the next timer tick or input event, as the

@@ -129,7 +129,6 @@ type VM struct {
 	fseq     uint8
 	fmuldes  uint8
 	fadddes  uint8
-	ferase   uint8
 
 	fview    uint16
 	valnorme uint32
@@ -150,7 +149,6 @@ type VM struct {
 	wcx, wcy, wcz int16
 	wforme        int16
 	tstinv        uint8 // own form mirrored, latched by the test opcodes (0x1602e)
-	matmask       int16
 	poldy, poldx  int16
 
 	acc    uint32 // virtual accumulator stack pointer (offset in mem)
@@ -239,8 +237,6 @@ type VM struct {
 	mv2      mv2State
 	film     film
 	filmnode uint16
-
-	walk walkState
 
 	px1, py1, pz1, px2, py2, pz2 int16
 

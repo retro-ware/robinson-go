@@ -107,7 +107,6 @@ func (v *VM) init() {
 	v.fseq = 0
 	v.fmuldes = 0
 	v.fadddes = 0
-	v.ferase = 0
 	v.saversp = 0
 	v.basevar = 0
 	v.nbprog = 0

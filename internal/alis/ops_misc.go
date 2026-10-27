@@ -144,7 +144,8 @@ func cautofile(v *VM) {
 	v.autoname[12] = 0
 }
 
+// cblast (0x4197) kills an entity and frees its elements at once.
 func cblast(v *VM) {
-	v.ferase = 1
+	v.mem[dsFerase] = 1
 	ckill(v)
 }

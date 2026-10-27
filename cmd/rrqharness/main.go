@@ -178,6 +178,7 @@ func main() {
 	rawDraw := flag.Int("rawdraw", 0, "draw for -raw")
 	vars := flag.String("vars", "", "write the scripts' state at draw -varsdraw to this file (as origrun -vars)")
 	varsDraw := flag.Int("varsdraw", 0, "draw for -vars")
+	dsDump := flag.String("dsdump", "", "write the data segment at draw -varsdraw to this file (as origrun -dsdump)")
 	flag.Parse()
 
 	h := &host{maxUs: *maxMs * 1000, lastCRC: 0xffffffff, dumpDir: *dump}
@@ -245,6 +246,11 @@ func main() {
 	vm.OnDraw = func() {
 		if *raw != "" && n == *rawDraw {
 			if err := os.WriteFile(*raw, append(append([]byte{}, vm.Screen()...), vm.DAC()...), 0o644); err != nil {
+				log.Fatal(err)
+			}
+		}
+		if *dsDump != "" && n == *varsDraw {
+			if err := os.WriteFile(*dsDump, vm.Mem(), 0o644); err != nil {
 				log.Fatal(err)
 			}
 		}

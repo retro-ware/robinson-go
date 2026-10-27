@@ -68,6 +68,7 @@ const (
 // element globals
 const (
 	dsFerase   = 0x15f9d
+	dsMip      = 0x16064 // speed calibration count
 	dsBasemain = 0x15fa0
 	dsOldcx    = 0x15fa4 // savecoord: position and angles of the running entity
 	dsOldcy    = 0x15fa6

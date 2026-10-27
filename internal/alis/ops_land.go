@@ -64,400 +64,371 @@ func cfilm(v *VM) {
 	v.cstoreContinue()
 }
 
-// headland turns the view pitch towards d4w, at most 15° per call.
-func (v *VM) headland(d4w int16) {
-	a := v.script.vramOrg + scrWCAX
-	n := d4w - v.r16(a)
-	if n == 0 {
+// The land opcodes' trigonometry uses the 9-bit sine tables at 0x19d42 and
+// 0x19c8e, indexed by twice the angle in degrees.
+func (v *VM) tsin(i int32) int16 { return v.r16(uint32(0x19d42 + i)) }
+func (v *VM) tcos(i int32) int16 { return v.r16(uint32(0x19c8e + i)) }
+
+// rolpos is a position as 16.16 value (rol of its dword: the integer word
+// comes first).
+func (v *VM) rolpos(a uint32) uint32 { return uint32(v.r32wc(a, 0)) }
+
+// landTurn is 0xcf0d: (ax, bx, cx) turned by the pitch dx and the heading
+// di, as 16.16 values; edx is left equal to ebx.
+func (v *VM) landTurn(ax, bx, cx, dx, di int16) (eax, ebx, ecx uint32) {
+	esi, ebp := int32(dx)*2, int32(di)*2
+	ecx = uint32(mul16(cx, v.tsin(esi))+mul16(bx, v.tcos(esi))) << 7
+	w := int16(mul16(v.tcos(ebp), v.tsin(esi)) >> 9)
+	eax = uint32(mul16(ax, v.tsin(ebp))) - uint32(mul16(w, bx))<<7
+	w = int16(mul16(v.tsin(esi), v.tsin(ebp)) >> 9)
+	ebx = uint32(mul16(w, bx))<<7 + uint32(mul16(ax, v.tcos(ebp)))
+	return
+}
+
+// landAtan is 0xcff9: the angle and the length of the vector (ax, bx),
+// from the arc tangent bytes at 0x1a2e4.
+func (v *VM) landAtan(ax, bx int16) (int16, int16) {
+	cx := ax
+	si, di := ax, bx
+	var bp int16
+	switch {
+	case si == 0:
+		switch {
+		case bx == 0:
+			bx = 0
+		case bx < 0:
+			bp = 0xb4
+		}
+		goto done
+	case di == 0:
+		goto vertical
+	}
+	if si < 0 {
+		si = -si
+	}
+	if di < 0 {
+		di = -di
+	}
+	if di >= si {
+		edx := uint32(int32(di) << 5)
+		bp = 0x5a
+		if uint16(si) > uint16(edx>>16) {
+			if q := uint16(edx / uint32(uint16(si))); q < 0x740 {
+				bp = int16(int8(v.mem[0x1a2e4+uint32(int32(int16(q)))]))
+				if bp == 0 {
+					goto vertical
+				}
+			}
+		}
+		if bx < 0 {
+			bp = -bp
+		}
+		bp -= 0x5a
+		if cx < 0 {
+			bp = -bp
+		}
+		bx = v.idiv32by16(int32(bx)<<9, v.tsin(int32(bp)*2))
+	} else {
+		edx := uint32(int32(si) << 5)
+		bp = 0x5a
+		if uint16(di) > uint16(edx>>16) {
+			if q := uint16(edx / uint32(uint16(di))); q < 0x740 {
+				bp = int16(int8(v.mem[0x1a2e4+uint32(int32(int16(q)))]))
+				if bp == 0 {
+					bp = 0
+					switch {
+					case bx == 0:
+						bx = 0
+					case bx < 0:
+						bp = 0xb4
+					}
+					goto done
+				}
+			}
+		}
+		if bx < 0 {
+			bp = -bp + 0xb4
+		}
+		if cx >= 0 {
+			bp = -bp
+		}
+		bx = v.idiv32by16(int32(cx)<<9, v.tcos(int32(bp)*2))
+	}
+	goto done
+vertical:
+	bx = cx
+	bp = -0x5a
+	if cx < 0 {
+		bp = 0x5a
+	}
+done:
+	if bx < 0 {
+		bx = -bx
+	}
+	return bp, bx
+}
+
+// landAim is 0xcfc6: the heading, the pitch and the distance from (dx, si,
+// di) to (ax, bx, cx).
+func (v *VM) landAim(ax, bx, cx, dx, si, di int16) (int16, int16, int16) {
+	ax, bx, cx = ax-dx, bx-si, cx-di
+	head, l := v.landAtan(ax, bx)
+	var pitch int16
+	if cx != 0 {
+		pitch, l = v.landAtan(-cx, l)
+	}
+	return head, pitch, l
+}
+
+// landAlti is 0xd5e6: the terrain height (cx) and map cell (dx) at the map
+// position (ax, bx) of the land at gs, for the entity at ebp. Outside the
+// map cx is the map shift and dx is kept.
+func (v *VM) landAlti(ax, bx, dx uint16, ebp uint32) (uint16, uint16) {
+	cx := v.gsu16(0x840)
+	ax = uint16(int16(ax) >> (cx & 31))
+	bx = uint16(int16(bx) >> (cx & 31))
+	if bx > v.gsu16(0x96a) || ax > v.gsu16(0x968) {
+		return cx, dx
+	}
+	eax := v.ru32(uint32(ax)*4 + v.ru32(0x1aa50))
+	eax = eax&0xffff0000 | uint32(uint16(eax)+bx*2)
+	dx = v.ru16(eax)
+	cx = uint16(uint8(dx))
+	di := uint32(dx&0x3f00) >> 3
+	f := int8(v.mem[v.gs(di+0x14)])
+	switch {
+	case f == 0:
+	case f < 0:
+		eax += v.gs32(di + 0x10)
+		b := uint16(v.mem[eax])
+		d := b - cx
+		t := -d + v.gsu16(di+0x16)
+		if int16(t) >= int16(d) || int16(b-t) <= v.r16(ebp+scrWCZ) {
+			dx = v.ru16(eax)
+			cx = uint16(uint8(dx))
+		}
+	case v.matmask() == 0 || v.gsu16(di+0x1a) == 0:
+	case f == 1:
+		if v.gs32(di+0x10) != 0 {
+			cx += 0xff
+		}
+	default:
+		cx += v.gsu16(di + 0x16)
+	}
+	return cx, dx
+}
+
+// landPitch is 0xd59c: the entity's pitch turns towards ax by a quarter of
+// the difference, 1 to 15 degrees, within ±0x4b.
+func (v *VM) landPitch(ax int16, ebp uint32) {
+	ax -= v.r16(ebp + scrWCAX)
+	if ax == 0 {
 		return
 	}
-	n >>= 2
-	if n < 0 {
-		if n < -0xf {
-			n = -0xf
-		}
+	ax >>= 2
+	if ax < 0 {
+		ax = max(ax, -0xf)
 	} else {
-		if n == 0 {
-			n = 1
+		if ax == 0 {
+			ax = 1
 		}
-		if 0xf < n {
-			n = 0xf
-		}
+		ax = min(ax, 0xf)
 	}
-	n += v.r16(a)
-	if n < 0x4c {
-		if n < -0x4b {
-			n = -0x4b
-		}
-	} else {
-		n = 0x4b
-	}
-	v.w16(a, n)
+	ax += v.r16(ebp + scrWCAX)
+	v.w16(ebp+scrWCAX, min(max(ax, -0x4b), 0x4b))
 }
 
-// walkState holds the walkland globals.
-type walkState struct {
-	cx, cy  int32
-	cz, ocz int16
-	dx, dy  int32
-	haut    int16
-	map3    uint8
-	dim     uint16
-	tete    int16
-	// stand-ins for the C locals landalti may leave unwritten
-	probeZ, sampleZ int16
+// landWalk is 0xd127: the entity at ebp steps by its x/y speed turned by
+// its heading onto the terrain, unless the height changes by more than
+// [0x1aad8]; [0x1aada] > 0 also pitches it along the slope ahead. It
+// returns the height change.
+func (v *VM) landWalk(ebp uint32) int16 {
+	const (
+		d0, d4, nx, ny, nz, z = 0x1aad0, 0x1aad4, 0x1aac4, 0x1aac8, 0x1aacc, 0x1aace
+		haut, tete            = 0x1aad8, 0x1aada
+	)
+	v.setMatmask(0)
+	if v.r16(tete) < 0 {
+		v.setMatmask(v.r16(tete))
+	}
+	edi := int32(v.r16(ebp+scrWCAZ)) * 2
+	bx, cx := int16(int8(v.mem[ebp+scrWCX2])), int16(int8(v.mem[ebp+scrWCY2]))
+	v.wu32(d0, uint32(mul16(v.tsin(edi), bx)-mul16(v.tcos(edi), cx))<<7)
+	v.wu32(nx, v.ru32(d0)+v.rolpos(ebp+scrWCX))
+	v.wu32(d4, uint32(mul16(v.tsin(edi), cx)+mul16(v.tcos(edi), bx))<<7)
+	v.wu32(ny, v.ru32(d4)+v.rolpos(ebp+scrWCY))
+	v.wu16(z, v.ru16(ebp+scrWCZ))
+	alti := func(x, y uint32) uint16 {
+		c, _ := v.landAlti(uint16(x>>16), uint16(y>>16), 0, ebp)
+		return c
+	}
+	h := alti(v.ru32(nx), v.ru32(ny))
+	v.wu16(nz, h)
+	h -= v.ru16(z)
+	// the corners and the cells ahead: a wall (0xff and up) stops the step
+	px, py := v.rolpos(ebp+scrWCX), v.rolpos(ebp+scrWCY)
+	a, b := v.ru32(d0), v.ru32(d4)
+	for _, p := range [][2]uint32{
+		{px + a + b, py + b + a}, {px + a - b, py + b - a}, {px + 2*a, py + 2*b},
+		{px + 2*a + b, py + 2*b + a}, {px + 2*a - b, py + 2*b - a},
+	} {
+		if c := alti(p[0], p[1]); int16(c) >= 0xff {
+			v.wu16(nz, c)
+			h = c - v.ru16(z)
+		}
+	}
+	if v.r16(tete) > 0 {
+		ah := h
+		if int16(ah) < 0 {
+			ah = -ah
+		}
+		if int16(ah) <= v.r16(haut) {
+			g := v.r16(v.gs(0x80c))
+			a = uint32(mul16(-g, v.tcos(edi))) << 7
+			b = uint32(mul16(g, v.tsin(edi))) << 7
+			v.wu32(d0, a)
+			v.wu32(d4, b)
+			si := (alti(px+a, py+b) - v.ru16(z)) << 2
+			si += (alti(px+2*a, py+2*b) - v.ru16(z)) << 1
+			si += alti(px+4*a, py+4*b) - v.ru16(z)
+			ax := si
+			if int16(ax) < 0 {
+				ax = -ax
+			}
+			// the slope's sign is lost: ax stays |si| (0x3c0 only clears si)
+			p := mul16(int16(ax), int16(int8(v.mem[tete+1])))
+			q := v.idiv32by16(p>>2, 0xc)
+			c := q
+			if p>>2 < 0 { // idiv leaves the flags of the sar before it
+				c = -c
+			}
+			if uint8(c) < v.mem[tete] {
+				q = 0
+			}
+			v.landPitch(q, ebp)
+		}
+	}
+	d := v.ru16(nz) - v.ru16(z)
+	if int16(d) < 0 {
+		d = -d
+	}
+	if int16(d) <= v.r16(haut) {
+		v.w32wc(ebp, scrWCX, int32(v.ru32(nx)))
+		v.w32wc(ebp, scrWCY, int32(v.ru32(ny)))
+		v.wu16(ebp+scrWCZ, v.ru16(nz))
+	}
+	return int16(v.ru16(nz) - v.ru16(z))
 }
 
-func hi16(x int32) int16 { return int16(uint32(x) >> 16) }
-
-// walkland moves the entity over the terrain of scene and returns the
-// height change.
-// TODO(START.EXE): the probes read uninitialised locals when landalti
-// misses the map.
-func (v *VM) walkland(scene uint32) int16 {
-	w := &v.walk
-	vram := v.script.vramOrg
-	v.matmask = 0
-	if w.tete < 0 {
-		v.matmask = w.tete
-	}
-	az := int32(v.r16(vram + scrWCAZ))
-	sin := int32(tabsin(az))
-	cos := int32(tabcos(az))
-	ox := int32(int8(v.mem[vram+scrWCX2]))
-	oy := int32(int8(v.mem[vram+scrWCY2]))
-	if w.tete != 0 {
-		w.dx = -int32(v.r16(scene-0x3f4)) * sin * 0x80
-		w.dy = int32(v.r16(scene-0x3f4)) * cos * 0x80
-	}
-	wx := v.r32wc(vram, scrWCX)
-	wy := v.r32wc(vram, scrWCY)
-	w.cx = wx + (cos*ox-sin*oy)*0x80
-	w.cy = wy + (cos*oy+sin*ox)*0x80
-	w.ocz = v.r16(vram + scrWCZ)
-	var cell int16
-	v.landalti(scene, vram, int16(w.cx>>16), int16(w.cy>>16), &w.cz, &cell)
-	dz := w.cz - w.ocz
-	if v.matmask != 0 {
-		probe := func(x, y int32) {
-			v.landalti(scene, vram, hi16(x), hi16(y), &w.probeZ, &cell)
-			if 0xfe < w.probeZ {
-				dz = w.probeZ - w.ocz
-				w.cz = w.probeZ
-			}
-		}
-		probe(wx+w.dy+w.dx, wy+w.dx+w.dy)
-		probe(wx+(w.dx-w.dy), wy+(w.dy-w.dx))
-		probe(wx+w.dx*2, wy+w.dy*2)
-		probe(wx+w.dy+w.dx*2, wy+w.dx+w.dy*2)
-		probe(wx+(w.dx*2-w.dy), wy+(w.dy*2-w.dx))
-	}
-	if 0 < w.tete {
-		ad := dz
-		if dz < 0 {
-			ad = -dz
-		}
-		if ad <= w.haut {
-			v.landalti(scene, vram, hi16(wx+w.dx), hi16(wy+w.dy), &w.sampleZ, &cell)
-			w.sampleZ = (w.sampleZ - w.ocz) * 4
-			w1 := w.sampleZ
-			v.landalti(scene, vram, hi16(wx+w.dx*2), hi16(wy+w.dy*2), &w.sampleZ, &cell)
-			w.sampleZ = (w.sampleZ - w.ocz) * 2
-			v.landalti(scene, vram, hi16(wx+w.dx*4), hi16(wy+w.dy*4), &w.sampleZ, &cell)
-			slope := uint16((w.sampleZ - w.ocz) + w1 + w.sampleZ)
-			as := slope
-			if int16(slope) < 0 {
-				as = -slope
-			}
-			if 0x3c0 < as {
-				slope = 0
-			}
-			wt := int32(int16(uint16(w.tete) >> 8))
-			w.sampleZ = int16((int32(int16(slope)) * wt >> 2) / 0xc)
-			ah := w.sampleZ
-			if w.sampleZ < 0 {
-				ah = -w.sampleZ
-			}
-			if uint8(ah) < w.map3 {
-				w.sampleZ = 0
-			}
-			v.headland(w.sampleZ)
-		}
-	}
-	adz := uint16(w.cz - w.ocz)
-	if int32(uint32(adz)<<16) < 0 {
-		adz = -adz
-	}
-	if w.haut < int16(adz) {
-		v.landalti(scene, vram, v.r16(vram+scrWCX), v.r16(vram+scrWCY), &w.probeZ, &cell)
-		v.w16(vram+scrWCZ, w.probeZ)
-	} else {
-		v.w32wc(vram, scrWCX, w.cx)
-		v.w32wc(vram, scrWCY, w.cy)
-		v.w16(vram+scrWCZ, w.cz)
-	}
-	return w.cz - w.ocz
-}
-
+// cwalkmap (0x4e14) walks the entity on the land of a map variable; D7 is
+// the height change.
 func cwalkmap(v *VM) {
-	scene := v.readVaddr()
-	v.readexecOpername()
-	v.walk.haut = int16(v.varD7)
-	v.readexecOpername()
-	v.walk.tete = int16(v.varD7)
-	v.readexecOpernameSaveD6()
-	v.walk.dim = uint16(v.varD6)
-	v.varD7 = int32(v.walkland(scene))
+	a := v.readVaddr()
+	v.wu16(0x1aad8, uint16(v.getval()))
+	v.wu16(0x1aada, uint16(v.getval()))
+	v.wu16(0x1aadc, uint16(v.getval()))
+	v.wu32(dsGsBase, a-0xc00)
+	v.varD7 = int32(v.landWalk(v.script.vramOrg))
 	v.cstoreContinue()
 }
 
-type vector struct{ x, y, z int32 }
-
-// polarmov turns a local move by the yaw and pitch (DOS: only the y terms
-// are scaled by 0x80).
-func polarmov(wcx2, wcy2, wcz2, wcax, wcaz int16) vector {
-	sinax := int32(tabsin(int32(wcax)))
-	sinaz := int32(tabsin(int32(wcaz)))
-	cosax := int32(tabcos(int32(wcax)))
-	cosaz := int32(tabcos(int32(wcaz)))
-	return vector{
-		x: cosaz*int32(wcx2) - int32(int16(sinaz*cosax>>9))*int32(wcy2)*0x80,
-		y: int32(int16(cosaz*cosax>>9))*int32(wcy2)*0x80 + sinaz*int32(wcx2),
-		z: (int32(wcy2)*sinax + int32(wcz2)*cosax) * 0x80,
-	}
-}
-
-// landalti reads the terrain cell under (x, y) of the map at addr; it
-// leaves alt and cell alone outside the map.
-func (v *VM) landalti(addr, vram uint32, x, y int16, alt, cell *int16) {
-	sh := uint16(v.r16(addr-0x3c0)) & 0x3f
-	gx := uint16(x >> sh)
-	gy := uint16(y >> sh)
-	if gy > v.ru16(addr-0x292) || gx > v.ru16(addr-0x294) {
-		return
-	}
-	ca := uint32(int32(int16(gy))*2 + v.r32(uint32(int32(v.img.atlland)+int32(int16(gx*4)))))
-	*cell = v.r16(ca)
-	*alt = *cell & 0xff
-	to := int32(((*cell & 0x3f00) >> 3) - 0xc00)
-	at := func(o uint32) uint32 { return uint32(int32(addr+o) + to) }
-	flag := int8(v.mem[at(0x14)])
-	if flag == 0 {
-		return
-	}
-	if flag < 0 {
-		ca += uint32(v.r32(at(0x10)))
-		diff := (v.r16(ca) & 0xff) - *alt
-		t := v.r16(at(0x16)) - diff
-		if diff <= t || (v.r16(ca)&0xff)-t <= v.r16(vram+scrWCZ) {
-			*cell = v.r16(ca)
-			*alt = *cell & 0xff
-		}
-		return
-	}
-	// flag 1 with a texture: alis/DOS add 0xff to the pointer, not the value
-	if v.matmask != 0 && v.r16(at(0x1a)) != 0 && flag != 1 {
-		*alt += v.r16(at(0x16))
-	}
-}
-
+// catstmap (0x4e57) stores the map cell under the entity's position moved
+// by (x, y, z) turned by its angles; D6 is the height there.
 func catstmap(v *VM) {
-	addr := v.readVaddr()
-	v.readexecOpername()
-	wcx2 := int16(v.varD7)
-	v.readexecOpername()
-	wcy2 := int16(v.varD7)
+	a := v.readVaddr()
+	ax := v.getval()
+	bx := v.getval()
 	v.readexecOpernameSaveD6()
-	wcz2 := int16(v.varD6)
 	vram := v.script.vramOrg
-	vec := polarmov(wcx2, wcy2, wcz2, v.r16(vram+scrWCAX), v.r16(vram+scrWCAZ))
-	v.matmask = 0
-	var alt int16
-	t7 := int16(v.varD7)
-	v.landalti(addr, vram, hi16(v.r32wc(vram, scrWCX)+vec.x), hi16(v.r32wc(vram, scrWCY)+vec.y), &alt, &t7)
-	v.varD7 = int32(t7)
+	eax, ebx, _ := v.landTurn(ax, bx, int16(v.varD6), v.r16(vram+scrWCAX), v.r16(vram+scrWCAZ))
+	v.wu32(dsGsBase, a-0xc00)
+	x, y := eax+v.rolpos(vram+scrWCX), ebx+v.rolpos(vram+scrWCY)
+	v.setMatmask(0)
+	cx, dx := v.landAlti(uint16(x>>16), uint16(y>>16), uint16(ebx), vram)
+	v.varD6 = int32(int16(cx))
+	v.varD7 = int32(int16(dx))
 	v.cstoreContinue()
 }
 
-func (v *VM) polarVec() vector {
-	vram := v.script.vramOrg
-	return polarmov(int16(int8(v.mem[vram+scrWCX2])), int16(int8(v.mem[vram+scrWCY2])),
-		int16(int8(v.mem[vram+scrWCZ2])), v.r16(vram+scrWCAX), v.r16(vram+scrWCAZ))
-}
-
+// cavtstmov (0x73f5) tests the entity's forms at its position moved by its
+// speed turned by its angles.
 func cavtstmov(v *VM) {
 	vram := v.script.vramOrg
-	vec := v.polarVec()
-	v.wcx = int16((v.r32wc(vram, scrWCX) + vec.x) >> 16)
-	v.wcy = int16((v.r32wc(vram, scrWCY) + vec.y) >> 16)
-	v.wcz = int16((v.r32wc(vram, scrWCZ) + vec.z) >> 16)
-	v.readexecOpername()
-	v.matmask = int16(v.varD7)
+	eax, ebx, ecx := v.landTurn(int16(int8(v.mem[vram+scrWCX2])), int16(int8(v.mem[vram+scrWCY2])),
+		int16(int8(v.mem[vram+scrWCZ2])), v.r16(vram+scrWCAX), v.r16(vram+scrWCAZ))
+	v.wcx = int16((eax + v.rolpos(vram+scrWCX)) >> 16)
+	v.wcy = int16((ebx + v.rolpos(vram+scrWCY)) >> 16)
+	v.wcz = int16((ecx + v.rolpos(vram+scrWCZ)) >> 16)
+	v.setMatmask(v.getval())
 	v.wforme = v.cforme(vram)
 	v.clipform()
 	crstent(v)
 }
 
+// cavmov (0x5e7c) moves the entity by the integer part of its speed turned
+// by its angles; dx is left with the low word of the y move, cx with z.
 func cavmov(v *VM) {
 	vram := v.script.vramOrg
-	vec := v.polarVec()
-	v.add16(vram+scrWCX, int16(vec.x>>16))
-	v.add16(vram+scrWCY, int16(vec.y>>16))
-	v.add16(vram+scrWCZ, int16(vec.z>>16))
+	eax, ebx, ecx := v.landTurn(int16(int8(v.mem[vram+scrWCX2])), int16(int8(v.mem[vram+scrWCY2])),
+		int16(int8(v.mem[vram+scrWCZ2])), v.r16(vram+scrWCAX), v.r16(vram+scrWCAZ))
+	v.add16(vram+scrWCX, int16(eax>>16))
+	v.add16(vram+scrWCY, int16(ebx>>16))
+	v.add16(vram+scrWCZ, int16(ecx>>16))
+	v.varD6 = int32(int16(ecx >> 16))
+	v.varD7 = int32(int16(ebx))
 }
 
-// getangle turns (x, y) into (angle, length).
-func getangle(atx, aty *int16) {
-	var angle int16
-	mag := *aty
-	x, y := *atx, *aty
-	if x == 0 {
-		if y == 0 {
-			mag = 0
-		} else if y < 0 {
-			angle = 0xb4
-		}
-	} else if y == 0 {
-		mag = x
-		angle = 0x5a
-		if x >= 0 {
-			angle = -0x5a
-		}
-	} else {
-		ax, ay := x, y
-		if ax < 0 {
-			ax = -ax
-		}
-		if ay < 0 {
-			ay = -ay
-		}
-		angle = 0x5a
-		if ay < ax {
-			r := int16((int32(ax) << 5) / int32(ay))
-			if uint16(r) < uint16(len(tabatan)) {
-				angle = int16(tabatan[r])
-			}
-			if uint16(r) >= uint16(len(tabatan)) || angle != 0 {
-				if y < 0 {
-					angle = 0xb4 - angle
-				}
-				if -1 < x {
-					angle = -angle
-				}
-				mag = int16((int32(x) * 0x200) / int32(tabsin(int32(angle))))
-			} else {
-				angle = 0
-				if y < 0 {
-					angle = 0xb4
-				}
-			}
-		} else {
-			r := int16((int32(ay) << 5) / int32(ax))
-			if uint16(r) < uint16(len(tabatan)) {
-				angle = int16(tabatan[r])
-			}
-			if uint16(r) >= uint16(len(tabatan)) || angle != 0 {
-				if y < 0 {
-					angle = -angle
-				}
-				angle -= 0x5a
-				if x < 0 {
-					angle = -angle
-				}
-				mag = int16((int32(y) * 0x200) / int32(tabcos(int32(angle))))
-			} else {
-				mag = x
-				angle = 0x5a
-				if x >= 0 {
-					angle = -0x5a
-				}
-			}
-		}
-	}
-	if mag < 0 {
-		mag = -mag
-	}
-	*atx = angle
-	*aty = mag
-}
-
-func polarang(cx, cy, cz *int16, x, y, z int16) {
-	*cx -= x
-	*cy -= y
-	*cz -= z
-	getangle(cx, cy)
-	var elev int16
-	if *cz != 0 {
-		elev = -*cz
-		getangle(&elev, cy)
-	}
-	*cz = *cy
-	*cy = elev
-}
-
+// caim (0x5f57) stores the pitch, the heading turned towards (x, y, z) by
+// at most the fourth operand (none from 0xb4), and the distance.
 func caim(v *VM) {
+	ax := v.getval()
+	bx := v.getval()
+	cx := v.getval()
 	vram := v.script.vramOrg
-	v.readexecOpername()
-	cx := int16(v.varD7)
-	v.readexecOpername()
-	cy := int16(v.varD7)
-	v.readexecOpername()
-	cz := int16(v.varD7)
-	polarang(&cx, &cy, &cz, v.r16(vram+scrWCX), v.r16(vram+scrWCY), v.r16(vram+scrWCZ))
-	if cz == 0 {
-		cx = v.r16(vram + scrWCAZ)
+	head, pitch, dist := v.landAim(ax, bx, cx, v.r16(vram+scrWCX), v.r16(vram+scrWCY), v.r16(vram+scrWCZ))
+	if dist == 0 {
+		head = v.r16(vram + scrWCAZ)
 	}
-	v.readexecOpername()
-	maxTurn := uint16(v.varD7)
-	if 0xb3 >= maxTurn {
-		cy = v.r16(vram + scrWCAZ)
-		d := uint16(cx - cy)
+	dx := v.getval()
+	ax = head
+	if uint16(dx) < 0xb4 {
+		bx := v.r16(vram + scrWCAZ)
+		ax = head - bx
+		up := func() { // 0x5fc4
+			ax = min(ax, dx) + bx
+		}
+		down := func() { // 0x5fdd
+			ax = max(ax, -dx) + bx
+		}
 		switch {
-		case int16(d) < 0 && int16(d) < -0xb3:
-			d += 0x168
-			if int16(d) < 0 {
-				if int16(d) <= int16(-maxTurn) {
-					d = -maxTurn
-				}
-				cx = cy + int16(d)
+		case ax >= 0 && ax < 0xb4:
+			up()
+		case ax >= 0:
+			if ax -= 0x168; ax < 0 {
+				down()
+			} else {
+				up()
 			}
-			if int16(maxTurn) <= int16(d) {
-				d = maxTurn
-			}
-			cx = cy + int16(d)
-		case int16(d) < 0:
-			if int16(d) <= int16(-maxTurn) {
-				d = -maxTurn
-			}
-			cx = cy + int16(d)
-		case 0xb3 < int16(d):
-			d -= 0x168
-			if int16(d) < 0 {
-				if int16(d) <= int16(-maxTurn) {
-					d = -maxTurn
-				}
-				cx = cy + int16(d)
-			}
+		case ax > -0xb4:
+			down()
 		default:
-			if int16(maxTurn) <= int16(d) {
-				d = maxTurn
+			if ax += 0x168; ax >= 0 {
+				up()
+			} else {
+				down()
 			}
-			cx = cy + int16(d)
 		}
 	}
-	if cx < 0x168 {
-		if cx < -0x167 {
-			cx += 0x168
-		}
-	} else {
-		cx -= 0x168
+	if ax >= 0x168 {
+		ax -= 0x168
+	} else if ax <= -0x168 {
+		ax += 0x168
 	}
-	v.varD7 = int32(cy)
-	v.cstoreContinue()
-	v.varD7 = int32(cx)
-	v.cstoreContinue()
-	v.varD7 = int32(cz)
-	v.cstoreContinue()
+	v.varD6 = int32(head)
+	for _, x := range []int16{pitch, ax, dist} {
+		v.varD7 = int32(x)
+		v.cstoreContinue()
+	}
 }
 
 func cpointpix(v *VM) {

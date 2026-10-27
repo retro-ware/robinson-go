@@ -375,9 +375,10 @@ func (v *VM) clivin() {
 	v.cstoreContinue()
 }
 
+// ckill (0x41a4) kills the entity in D7 unless it is 0 or negative.
 func ckill(v *VM) {
 	v.readexecOpernameSaveD7()
-	if v.varD7 < 0 {
+	if int16(v.varD7) <= 0 {
 		return
 	}
 	v.killent(uint16(v.varD7))
@@ -455,11 +456,14 @@ func cforme(v *VM) {
 
 func cdelforme(v *VM) { v.w16(v.script.vramOrg-0x1a, -1) }
 
+// cclock (0x85f5) sets the entity's run interval; edx keeps the next run tick.
 func cclock(v *VM) {
 	v.readexecOpername()
 	vram := v.script.vramOrg
 	v.wu16(vram-0x3a, uint16(v.varD7))
-	v.wu32(vram-0x3e, uint32(v.varD7)+v.timeclock)
+	next := uint32(uint16(v.varD7)) + v.timeclock
+	v.wu32(vram-0x3e, next)
+	v.varD7 = int32(int16(next))
 }
 
 func cret(v *VM) {
@@ -596,7 +600,7 @@ func cstart24(v *VM) { v.cstart(v.readOff24()) }
 func (v *VM) killent(ent uint16) {
 	vram := uint32(v.r32(v.atent + uint32(ent)))
 	if vram == 0 {
-		v.ferase = 0
+		v.mem[dsFerase] = 0
 		return
 	}
 	s := v.entscr(ent)
